@@ -377,3 +377,18 @@ Added via `app/__init__.py` `after_request`:
   that genuinely can't have a session-bound token: login, registration (no session exists yet), and the
   IntaSend payment webhook (called directly by IntaSend's servers, verified instead via the webhook
   challenge secret). All three are the correct, standard exemptions for those cases, not oversights.
+
+## 17. Fix: System Maintainer dashboard said "no hospital assigned"
+Logging in as a System Maintainer landed on the generic staff dashboard, which requires
+`current_user.hospital` and shows "contact your administrator" when it's null — correct message for a
+Doctor/Nurse with a missing assignment, nonsensical for a platform-wide account that's *supposed* to have
+no single hospital.
+
+- `app/main/routes.py`: added a `scope == "platform"` branch that reuses the existing CEO-style overview
+  dashboard, but across **every hospital on the install** (not just one organization's) — consistent with
+  `accessible_hospital_ids()` already returning everything for this scope.
+- `app/templates/main/dashboard_ceo.html`: labeled "Platform Overview" instead of "Organization Overview"
+  when viewed this way, and each hospital card now shows which organization it belongs to (not shown
+  before, since a CEO's own view never spans more than one organization to begin with).
+
+No migration needed — this is routing/template logic only.

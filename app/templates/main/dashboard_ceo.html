@@ -1,8 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Organization Overview{% endblock %}
+{% block title %}{{ 'Platform Overview' if is_platform_view else 'Organization Overview' }}{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-1">Organization Overview</h1>
-<p class="text-sm text-slate-500 mb-6">Live activity across every hospital/branch you oversee.</p>
+<h1 class="text-2xl font-bold mb-1">{{ 'Platform Overview' if is_platform_view else 'Organization Overview' }}</h1>
+<p class="text-sm text-slate-500 mb-6">
+  {{ 'Live activity across every hospital on this install, every organization.' if is_platform_view else 'Live activity across every hospital/branch you oversee.' }}
+</p>
 
 <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
   <div class="bg-white rounded-lg shadow p-4">
@@ -37,7 +39,9 @@
         {{ 'Active' if row.hospital.is_active else 'Inactive' }}
       </span>
     </div>
-    <p class="text-xs text-slate-500 mb-3">{{ row.hospital.level }} · {{ row.hospital.county or '-' }}</p>
+    <p class="text-xs text-slate-500 mb-3">
+      {% if is_platform_view %}{{ row.hospital.organization.name }} · {% endif %}{{ row.hospital.level }} · {{ row.hospital.county or '-' }}
+    </p>
 
     <div class="grid grid-cols-2 gap-2 text-sm">
       <div class="flex justify-between"><span class="text-slate-500">Staff</span><span class="font-medium">{{ row.staff_count }}</span></div>

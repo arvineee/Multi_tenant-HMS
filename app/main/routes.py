@@ -115,6 +115,24 @@ def _hospital_stats(hospital):
 @main_bp.route("/")
 @login_required
 def dashboard():
+    if current_user.role.scope == "platform":
+        # System Maintainer — no single hospital or organization to
+        # scope to by definition, so show every hospital on the install,
+        # not just one organization's. Reuses the CEO dashboard template
+        # (it doesn't reference any specific organization, just a list
+        # of hospitals), with a flag so it can label itself accordingly.
+        hospitals = Hospital.query.all()
+        stats = [_hospital_stats(h) for h in hospitals]
+        org_totals = {
+            "hospital_count": len(hospitals),
+            "staff_count": sum(s["staff_count"] for s in stats),
+            "visits_today": sum(s["visits_today"] for s in stats),
+            "revenue_today": sum(s["revenue_today"] for s in stats),
+            "revenue_month": sum(s["revenue_month"] for s in stats),
+            "outstanding_balance": sum(s["outstanding_balance"] for s in stats),
+        }
+        return render_template("main/dashboard_ceo.html", stats=stats, org_totals=org_totals, is_platform_view=True)
+
     if current_user.role.scope == "organization":
         hospitals = Hospital.query.filter_by(organization_id=current_user.organization_id).all()
         stats = [_hospital_stats(h) for h in hospitals]
