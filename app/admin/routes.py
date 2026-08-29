@@ -14,6 +14,11 @@ from app.models import (
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
 
+# Role scope hierarchy, broadest first — shared between users_list() (which
+# role options to even show someone) and users_create() (the actual
+# enforcement). Kept in one place so the two can't quietly drift apart.
+SCOPE_RANK = {"department": 0, "hospital": 1, "organization": 2, "platform": 3}
+
 
 # ---------------------------------------------------------------------------
 # Hospital settings — name/logo/contact info, editable per-hospital
@@ -164,10 +169,13 @@ def users_list():
     if current_user.role.scope != "organization":
         query = query.filter(User.hospital_id.in_(current_user.accessible_hospital_ids()))
     users = query.all()
-    # Platform-scope roles (System Maintainer) are never offered here,
-    # regardless of who's looking — see the matching guard in
-    # users_create(). There's no ordinary-admin path to this role at all.
-    roles = Role.query.filter(Role.scope != "platform").order_by(Role.name).all()
+    # Only offer roles this user is actually allowed to grant — same rule
+    # users_create() enforces server-side. This is just UI tidiness (a
+    # Hospital Manager would otherwise see "CEO" in the dropdown and only
+    # find out it's rejected after submitting); the real boundary is the
+    # backend check, not this filter.
+    my_rank = SCOPE_RANK.get(current_user.role.scope, 0)
+    roles = [r for r in Role.query.order_by(Role.name).all() if SCOPE_RANK.get(r.scope, 0) <= my_rank]
     hospitals = Hospital.query.filter(Hospital.id.in_(current_user.accessible_hospital_ids())).all() \
         if current_user.role.scope != "organization" \
         else Hospital.query.filter_by(organization_id=current_user.organization_id).all()
@@ -195,19 +203,32 @@ def users_create():
     if not role:
         return jsonify(success=False, error="Invalid role."), 400
 
-    # System Maintainer (and any future platform-scope role) can never be
-    # granted through this screen — not by a Hospital Manager, not by
-    # Admin, not even by a CEO. It has no self-service path at all,
-    # by design: create_system_maintainer.py is the only way to create
-    # one, run directly on the server. This check is the actual security
-    # boundary; the roles list filtered out in users_list() is just UI
-    # tidiness on top of it, not something to rely on alone.
-    if role.scope == "platform" and current_user.role.scope != "platform":
-        return jsonify(success=False, error="This role can't be assigned from here."), 403
+    if temp_password and len(temp_password) < 8:
+        return jsonify(success=False, error="Password must be at least 8 characters."), 400
 
-    # a Hospital Manager can only create staff inside hospitals they can access
-    if current_user.role.scope != "organization" and hospital_id:
-        if int(hospital_id) not in current_user.accessible_hospital_ids():
+    # A role can only be granted by someone whose own access is at least
+    # as broad — otherwise a hospital-scoped Hospital Manager/Admin could
+    # create a brand-new user with the org-wide CEO role (or, without
+    # this, anyone with users.manage could hand out System Maintainer)
+    # and escalate straight past their own intended scope. platform is
+    # the broadest, then organization, then hospital, then department —
+    # this one check covers every level, including the platform case
+    # that used to be its own special-cased condition.
+    if SCOPE_RANK.get(role.scope, 0) > SCOPE_RANK.get(current_user.role.scope, 0):
+        return jsonify(success=False, error="You can't assign a role with broader access than your own."), 403
+
+    if hospital_id:
+        hospital = Hospital.query.get(hospital_id)
+        # Regardless of the acting user's own scope, the hospital being
+        # assigned must belong to their organization — otherwise the new
+        # user's organization_id (set to the creator's org, below) and
+        # hospital_id end up pointing at two different organizations,
+        # and accessible_hospital_ids() would hand that new account
+        # another organization's hospital data.
+        if not hospital or hospital.organization_id != current_user.organization_id:
+            return jsonify(success=False, error="Invalid hospital."), 400
+        # a Hospital Manager/Admin can only create staff inside hospitals they can access
+        if current_user.role.scope != "organization" and hospital.id not in current_user.accessible_hospital_ids():
             return jsonify(success=False, error="You can't assign users outside your hospital(s)."), 403
 
     user = User(
@@ -231,12 +252,58 @@ def users_create():
 @permission_required("users.manage")
 def users_toggle_active(user_id):
     user = User.query.get_or_404(user_id)
-    if current_user.role.scope != "organization" and user.hospital_id not in current_user.accessible_hospital_ids():
-        return jsonify(success=False, error="Not allowed."), 403
+
+    # This previously only restricted hospital-scoped actors (Hospital
+    # Manager/Admin) and left the "organization" scope (CEO) branch
+    # completely unchecked — meaning any CEO account could deactivate
+    # *any* user system-wide just by guessing/incrementing user_id,
+    # including staff at a totally different organization, or a System
+    # Maintainer account. Every scope now gets an explicit boundary:
+    # platform can act on anyone, organization is confined to its own
+    # organization_id, everyone narrower is confined to hospitals they
+    # can access.
+    if current_user.role.scope == "platform":
+        pass
+    elif current_user.role.scope == "organization":
+        if user.organization_id != current_user.organization_id:
+            return jsonify(success=False, error="Not allowed."), 403
+    else:
+        if user.hospital_id not in current_user.accessible_hospital_ids():
+            return jsonify(success=False, error="Not allowed."), 403
+
+    if user.id == current_user.id:
+        return jsonify(success=False, error="You can't deactivate your own account."), 400
+
     user.is_active = not user.is_active
     log_action(current_user, "update", "User", user.id, {"is_active": user.is_active})
     db.session.commit()
     return jsonify(success=True, is_active=user.is_active)
+
+
+@admin_bp.route("/users/<int:user_id>/unlock", methods=["POST"])
+@login_required
+@permission_required("users.manage")
+def users_unlock(user_id):
+    """Clears a login lockout early — for when a legitimate staff member
+    is locked out (mistyped password a few too many times) and shouldn't
+    have to wait out the timer. Same authorization boundary as
+    toggle-active above."""
+    user = User.query.get_or_404(user_id)
+
+    if current_user.role.scope == "platform":
+        pass
+    elif current_user.role.scope == "organization":
+        if user.organization_id != current_user.organization_id:
+            return jsonify(success=False, error="Not allowed."), 403
+    else:
+        if user.hospital_id not in current_user.accessible_hospital_ids():
+            return jsonify(success=False, error="Not allowed."), 403
+
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    log_action(current_user, "update", "User", user.id, {"unlocked": True})
+    db.session.commit()
+    return jsonify(success=True)
 
 
 # ---------------------------------------------------------------------------

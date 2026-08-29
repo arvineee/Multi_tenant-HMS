@@ -70,9 +70,45 @@ def create_app(config_class=None):
         if current_user.must_change_password:
             return redirect(url_for("auth.change_password"))
 
+        # System Maintainer accounts aren't a paying customer's org —
+        # they're internal platform staff, sitting under a dedicated
+        # placeholder organization that was never meant to carry a
+        # trial/subscription at all. Gating them on it was a bug: it has
+        # no trial_ends_at, so has_access is always False and every
+        # System Maintainer got bounced to the subscription page on
+        # login. Platform scope is exempt from this gate entirely.
+        if current_user.role.scope == "platform":
+            return None
+
         org = current_user.organization
         if org and not org.has_access:
             return redirect(url_for("subscription.status"))
         return None
+
+    @app.after_request
+    def set_security_headers(response):
+        # Clickjacking protection — this app performs real clinical/
+        # billing actions from buttons, so it must never be embeddable in
+        # another site's invisible iframe.
+        response.headers["X-Frame-Options"] = "DENY"
+        # Stops the browser guessing content types (e.g. treating an
+        # uploaded file as HTML/JS and executing it).
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Every page here can carry patient data, and this app is built
+        # for shared clinic terminals — the whole point of the 20-minute
+        # idle session timeout in config.py. No-store means the browser
+        # (and any shared-computer disk cache) never writes a page
+        # containing patient data to disk, so hitting "back" after
+        # logging out on a shared terminal can't resurrect it either.
+        # Excluded for /static/ — those are just CSS/JS/images with
+        # nothing patient-related in them, and forcing a re-download of
+        # every asset on every request would hurt on the kind of mobile
+        # connection a clinic is likely running on.
+        if not request.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
     return app

@@ -46,7 +46,13 @@ def run():
         # and reports.
         org = Organization.query.filter_by(name=MAINTENANCE_ORG_NAME).first()
         if not org:
-            org = Organization(name=MAINTENANCE_ORG_NAME, plan_level="Level 4")
+            # subscription_status="purchased" means Organization.has_access
+            # is always True with no expiry to track — this org was never
+            # meant to be gated by a trial/subscription at all (the actual
+            # fix for that is the platform-scope exemption in
+            # app/__init__.py's before_request gate; this is just defense
+            # in depth in case anything else ever checks org.has_access).
+            org = Organization(name=MAINTENANCE_ORG_NAME, plan_level="Level 4", subscription_status="purchased")
             db.session.add(org)
             db.session.flush()
             print(f"Created placeholder organization '{MAINTENANCE_ORG_NAME}'.")

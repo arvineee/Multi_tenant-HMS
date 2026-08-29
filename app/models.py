@@ -192,6 +192,10 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     must_change_password = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
+
+    # --- login throttling ---
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=now)
 
     def set_password(self, raw_password):
@@ -199,6 +203,27 @@ class User(UserMixin, db.Model):
 
     def check_password(self, raw_password):
         return check_password_hash(self.password_hash, raw_password)
+
+    @property
+    def is_locked_out(self):
+        return bool(self.locked_until and now() < self.locked_until)
+
+    def register_failed_login(self, max_attempts, lockout_minutes):
+        """Call after a failed password check. Locks the account once
+        max_attempts is reached, resetting the counter so the lockout
+        window restarts cleanly on the next attempt rather than
+        compounding indefinitely."""
+        self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
+        if self.failed_login_attempts >= max_attempts:
+            self.locked_until = now() + datetime.timedelta(minutes=lockout_minutes)
+            self.failed_login_attempts = 0
+            return True  # just got locked out by this attempt
+        return False
+
+    def register_successful_login(self):
+        self.failed_login_attempts = 0
+        self.locked_until = None
+        self.last_login = now()
 
     def has_permission(self, code):
         return self.role.has_permission(code) if self.role else False

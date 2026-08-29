@@ -1,6 +1,6 @@
 import datetime
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app.extensions import db, csrf
@@ -28,15 +28,40 @@ def login():
         (User.username == username) | (User.email == username)
     ).first()
 
+    # Checked before the password so a locked-out account never reaches
+    # check_password_hash at all — there's nothing to gain from doing the
+    # (deliberately slow) hash comparison on an attempt we're rejecting
+    # regardless of whether the password is right.
+    if user and user.is_locked_out:
+        return jsonify(success=False, error="Too many failed attempts. Try again later."), 429
+
     if not user or not user.check_password(password):
+        if user:
+            just_locked = user.register_failed_login(
+                current_app.config["LOGIN_MAX_ATTEMPTS"], current_app.config["LOGIN_LOCKOUT_MINUTES"]
+            )
+            log_action(user, "login_locked" if just_locked else "login_failed", ip_address=request.remote_addr)
+            db.session.commit()
+            if just_locked:
+                return jsonify(
+                    success=False,
+                    error=f"Too many failed attempts. Account locked for {current_app.config['LOGIN_LOCKOUT_MINUTES']} minutes.",
+                ), 429
+        else:
+            # No matching account — nothing to lock (locking on a made-up
+            # username would let someone lock out an account they don't
+            # even know exists to begin with; there's no real account
+            # here to protect), but still worth a trace of the attempt.
+            log_action(None, "login_failed", details={"username_attempted": username}, ip_address=request.remote_addr)
+            db.session.commit()
         return jsonify(success=False, error="Invalid username or password."), 401
 
     if not user.is_active:
         return jsonify(success=False, error="This account has been deactivated. Contact your admin."), 403
 
+    user.register_successful_login()
     login_user(user)
     session.permanent = True
-    user.last_login = db.func.now()
     log_action(user, "login", ip_address=request.remote_addr)
     db.session.commit()
 

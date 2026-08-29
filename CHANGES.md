@@ -278,3 +278,102 @@ System Settings page — one place, not code changes, to adjust deployment behav
 - **`HOST`/`PORT`** added — `run.py` now binds to `0.0.0.0` if you set `HOST=0.0.0.0` in `.env`, useful
   for reaching the dev server from other devices on the clinic's network (other tablets/phones), without
   editing `run.py` itself.
+
+## 16. Security pass
+A focused review across authentication, authorization, and a few infra basics. Several of these are
+genuine vulnerabilities, not just hardening — flagged as such below.
+
+**One needs a migration** (new `User` columns for login lockout — see below). Everything else is
+Python-only, no schema change.
+
+### Fixed: System Maintainer bounced to "trial expired" (the bug in your screenshot)
+The billing/trial gate (`app/__init__.py`) applied to every authenticated user, including System
+Maintainer accounts — whose placeholder organization was never meant to carry a trial at all, so it had
+no `trial_ends_at` and always failed the access check. Platform-scope accounts are now exempt from this
+gate entirely; no action needed on your end beyond redeploying this code — it doesn't matter what
+subscription state your already-created placeholder org is in.
+
+### Critical: cross-organization IDOR in `users_toggle_active`
+Any CEO account could deactivate **any** user system-wide — a different organization's staff, or even a
+System Maintainer account — just by guessing/incrementing a user ID in the request. The existing check
+only restricted hospital-scoped actors (Hospital Manager/Admin); the organization-scope branch (CEO) had
+no boundary check at all. Fixed with an explicit per-scope check (platform: unrestricted, organization:
+same org only, narrower: same accessible hospitals only). Also added: you can no longer deactivate your
+own account (avoids an admin accidentally locking themselves out).
+
+### High: privilege escalation via role assignment in `users_create`
+Anyone holding `users.manage` — which includes hospital-scoped **Hospital Manager** and **Admin**, not
+just the org-wide CEO — could create a brand-new user and assign them **any** role, including CEO itself.
+A compromised or malicious Hospital Manager account could mint a new CEO-level account and escalate from
+single-hospital access to full organization-wide access. Fixed with a role-scope hierarchy check
+(`platform > organization > hospital > department` in `app/admin/routes.py`): you can only grant a role
+at or below your own scope. This one check also covers the System Maintainer case that was previously a
+separate special-cased condition. The role dropdown in `users_list()` is now filtered the same way, so
+Hospital Managers don't even see "CEO" as an option — cosmetic, since the real enforcement is server-side,
+but avoids a confusing rejected-after-submit experience.
+
+### High: `users_create` — mismatched hospital/organization
+You could pass a `hospital_id` belonging to a *different* organization than the one being created for.
+Since the new user's `organization_id` is set to the creator's own org, this left `organization_id` and
+`hospital_id` pointing at two different organizations — and since hospital-scoped access is computed from
+`hospital_id`, that new account would end up able to see the other organization's data. Now validated:
+the hospital must belong to the acting user's own organization, regardless of their role scope. Also
+added: admin-set passwords for new accounts now go through the same 8-character minimum enforced
+everywhere else (previously unenforced here specifically).
+
+### High: no brute-force protection on login
+There was no account lockout, no rate limiting, no cooldown — unlimited password guesses against any
+known username. Added:
+- `User.failed_login_attempts` / `User.locked_until` (**new columns — migration needed**).
+- `LOGIN_MAX_ATTEMPTS` (default 5) / `LOGIN_LOCKOUT_MINUTES` (default 15) in `config.py`/`.env`.
+- Locked accounts are rejected *before* the password hash comparison even runs — no point doing
+  deliberately-slow work on a request that's being rejected regardless.
+- Failed attempts (including against usernames that don't exist at all) and lockouts are now written to
+  the audit log — visible on the System Maintenance dashboard's recent-activity feed.
+- New "Unlock" action on the Users page for admins to clear a legitimate lockout early, instead of making
+  a locked-out staff member wait out the timer.
+- **Honest limitation**: this is per-account lockout, not per-IP rate limiting. It stops repeated
+  guessing against one known account, but doesn't throttle someone spraying different usernames from a
+  single IP. True IP-based throttling that survives process restarts and works with multiple worker
+  processes needs infrastructure outside the Flask app itself (a reverse proxy rate limiter, or
+  fail2ban watching the access log) — flagging this as an infra-level recommendation rather than
+  building a fragile in-process approximation.
+
+### Medium: missing HTTP security headers
+Added via `app/__init__.py` `after_request`:
+- `X-Frame-Options: DENY` — clickjacking protection; this app performs real clinical/billing actions
+  from buttons, so it must never be embeddable in another site's invisible iframe.
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Cache-Control: no-store` on everything except `/static/` — every page here can carry patient data,
+  and this app is explicitly built for shared clinic terminals (the reason the 20-minute idle session
+  timeout exists at all). This stops a shared computer's disk cache from retaining a page with patient
+  data on it, and stops hitting "back" after logout from resurrecting a cached page.
+- `Strict-Transport-Security` once `SESSION_COOKIE_SECURE` is on (i.e. once you're actually serving over
+  HTTPS).
+- **Deliberately not added: Content-Security-Policy.** This codebase uses inline `onclick="..."`
+  handlers and inline `<script>` blocks throughout nearly every template. A CSP strict enough to matter
+  would break the UI outright; one loose enough not to (`'unsafe-inline'` for scripts) gives little real
+  XSS protection while creating a false sense of security. Doing this properly means migrating inline
+  handlers to `addEventListener`-based JS with a nonce-based CSP — a real, separate project, not
+  something to bolt on inside a broader security pass. Flagging it rather than shipping something
+  untested that could silently break pages I can't click-test from here.
+
+### Reviewed, found clean
+- No raw SQL string interpolation anywhere (`db.session.execute`/`text()` usage is limited to two
+  Postgres-specific partial-index clauses in an Alembic migration, not app code) — everything else goes
+  through the SQLAlchemy ORM, which parameterizes automatically.
+- No `|safe` Jinja filter usage anywhere in templates — Jinja's autoescaping is intact everywhere.
+- No `eval`/`exec`/`pickle`/`subprocess`/`os.system` usage anywhere in the codebase.
+- The one `send_file` call (`app/manual/routes.py`, the user manual PDF) uses a fixed, hardcoded path —
+  no user input reaches it, so no path-traversal risk there.
+- Spot-checked every other `get_or_404`/`.query.get(...)` call site across billing, pharmacy, clinical,
+  documents, inpatient, and subscription routes for the same missing-boundary-check pattern found in
+  `users_toggle_active` — all of them already correctly check `accessible_hospital_ids()` or
+  `organization_id` before acting. That bug appears to have been isolated to the two routes fixed above.
+- Password hashing already uses Werkzeug's `generate_password_hash`/`check_password_hash` (PBKDF2), which
+  is fine — no change needed.
+- CSRF protection (Flask-WTF) is already active app-wide, with the only exemptions being the three routes
+  that genuinely can't have a session-bound token: login, registration (no session exists yet), and the
+  IntaSend payment webhook (called directly by IntaSend's servers, verified instead via the webhook
+  challenge secret). All three are the correct, standard exemptions for those cases, not oversights.

@@ -70,6 +70,10 @@ class Config:
     # --- new-account defaults — see admin/routes.py:users_create() ---
     DEFAULT_TEMP_PASSWORD = os.environ.get("DEFAULT_TEMP_PASSWORD", "ChangeMe123!")
 
+    # --- login brute-force protection ---
+    LOGIN_MAX_ATTEMPTS = _env_int("LOGIN_MAX_ATTEMPTS", 5)
+    LOGIN_LOCKOUT_MINUTES = _env_int("LOGIN_LOCKOUT_MINUTES", 15)
+
     # --- pharmacy ---
     # System-wide fallback only — each hospital can override this from the
     # Pricing & System Settings page (Hospital.low_stock_threshold).

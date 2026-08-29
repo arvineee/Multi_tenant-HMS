@@ -32,9 +32,15 @@
           <span class="px-2 py-1 rounded text-xs {{ 'bg-emerald-100 text-emerald-700' if u.is_active else 'bg-red-100 text-red-700' }}">
             {{ 'Active' if u.is_active else 'Inactive' }}
           </span>
+          {% if u.is_locked_out %}
+          <span class="px-2 py-1 rounded text-xs bg-amber-100 text-amber-700 ml-1">Locked out</span>
+          {% endif %}
         </td>
         <td class="px-4 py-3">
           <button onclick="toggleActive({{ u.id }})" class="text-xs text-emerald-700 hover:underline">Toggle</button>
+          {% if u.is_locked_out %}
+          <button onclick="unlockUser({{ u.id }})" class="text-xs text-amber-700 hover:underline ml-2">Unlock</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -93,6 +99,16 @@ async function toggleActive(userId) {
     window.location.reload();
   } else {
     showToast(data.error || 'Could not update status.', true);
+  }
+}
+
+async function unlockUser(userId) {
+  const data = await postJSON(`/admin/users/${userId}/unlock`, {});
+  if (data.success) {
+    showToast('Account unlocked.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not unlock account.', true);
   }
 }
 </script>
