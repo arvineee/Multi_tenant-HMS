@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Organization Overview{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Organization Overview</h1>
+<p class="text-sm text-slate-500 mb-6">Live activity across every hospital/branch you oversee.</p>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Hospitals</p>
+    <p class="text-2xl font-bold">{{ org_totals.hospital_count }}</p>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Active Staff</p>
+    <p class="text-2xl font-bold">{{ org_totals.staff_count }}</p>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Visits Today</p>
+    <p class="text-2xl font-bold">{{ org_totals.visits_today }}</p>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Revenue Today</p>
+    <p class="text-2xl font-bold">KES {{ '{:,.0f}'.format(org_totals.revenue_today) }}</p>
+  </div>
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Outstanding</p>
+    <p class="text-2xl font-bold {{ 'text-red-600' if org_totals.outstanding_balance > 0 else '' }}">KES {{ '{:,.0f}'.format(org_totals.outstanding_balance) }}</p>
+  </div>
+</div>
+
+<h2 class="font-semibold text-slate-700 mb-3">By Hospital</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for row in stats %}
+  <div class="bg-white rounded-lg shadow p-5">
+    <div class="flex items-center justify-between mb-1">
+      <p class="font-semibold">{{ row.hospital.name }}</p>
+      <span class="{{ 'text-emerald-600' if row.hospital.is_active else 'text-red-600' }} text-xs font-semibold">
+        {{ 'Active' if row.hospital.is_active else 'Inactive' }}
+      </span>
+    </div>
+    <p class="text-xs text-slate-500 mb-3">{{ row.hospital.level }} · {{ row.hospital.county or '-' }}</p>
+
+    <div class="grid grid-cols-2 gap-2 text-sm">
+      <div class="flex justify-between"><span class="text-slate-500">Staff</span><span class="font-medium">{{ row.staff_count }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Visits today</span><span class="font-medium">{{ row.visits_today }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">In queue now</span><span class="font-medium">{{ row.active_visits }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Beds</span><span class="font-medium">{{ row.occupied_beds }}/{{ row.total_beds }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Revenue today</span><span class="font-medium">KES {{ '{:,.0f}'.format(row.revenue_today) }}</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Outstanding</span><span class="font-medium {{ 'text-red-600' if row.outstanding_balance > 0 else '' }}">KES {{ '{:,.0f}'.format(row.outstanding_balance) }}</span></div>
+    </div>
+
+    {% if row.low_stock_count > 0 %}
+    <p class="text-xs text-red-600 mt-3">⚠ {{ row.low_stock_count }} drug(s) low on stock</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="text-sm text-slate-500">No hospitals set up yet. Add one from Hospitals / Branches.</p>
+  {% endfor %}
+</div>
+{% endblock %}

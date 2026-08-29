@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Ward Census{% endblock %}
+{% block content %}
+<h1 class="text-xl font-bold mb-1">Ward Census</h1>
+<p class="text-sm text-slate-500 mb-6">Who's in which bed, right now.</p>
+
+<div class="space-y-6">
+  {% for ward in wards %}
+  {% set admissions = by_ward.get(ward.id, []) %}
+  <div class="bg-white rounded-lg shadow">
+    <div class="flex justify-between items-center px-5 py-3 border-b">
+      <h2 class="font-semibold">{{ ward.name }} <span class="text-xs text-slate-400 font-normal">({{ ward.ward_type or '—' }})</span></h2>
+      <span class="text-sm text-slate-500">{{ ward.occupied_beds }}/{{ ward.total_beds or (ward.occupied_beds + ward.available_beds) }} beds occupied</span>
+    </div>
+    {% if admissions %}
+    <table class="w-full text-sm">
+      <thead class="text-left text-slate-500 border-b">
+        <tr><th class="px-5 py-2">Bed</th><th>Patient</th><th>Admitting Dr.</th><th>Day of stay</th><th>Insurance</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for a in admissions|sort(attribute='bed_label') %}
+        <tr class="border-b last:border-0">
+          <td class="px-5 py-2 font-medium">{{ a.bed_label }}</td>
+          <td>{{ a.patient.full_name }}</td>
+          <td>{{ a.admitting_doctor.full_name if a.admitting_doctor else '—' }}</td>
+          <td>Day {{ a.length_of_stay_days }}</td>
+          <td>
+            {% if a.patient.insurance_scheme %}
+              {% if a.insurance_limit_reached %}
+              <span class="text-red-600 font-semibold">Limit reached</span>
+              {% else %}
+              <span class="text-slate-500">{{ a.patient.insurance_scheme.name }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-slate-400">Cash</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-2 text-right">
+            <a href="{{ url_for('inpatient.admission_workspace', admission_id=a.id) }}" class="text-emerald-700 hover:underline font-semibold">Open →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-slate-400 text-sm px-5 py-4">No patients currently in this ward.</p>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="text-slate-400">No active wards set up for this facility.</p>
+  {% endfor %}
+</div>
+{% endblock %}

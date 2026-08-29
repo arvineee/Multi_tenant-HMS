@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Register Your Organization · MediCore HMIS{% endblock %}
+{% block guest_content %}
+<div class="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-10">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-xl p-8">
+    <h1 class="text-xl font-bold text-slate-800 mb-1">Register Your Organization</h1>
+    <p class="text-sm text-slate-500 mb-6">
+      Set up a completely independent workspace for your hospital or hospital group —
+      your own hospitals, staff, formulary, and billing, fully separate from every other
+      organization on this system.
+    </p>
+
+    <div id="register-error" class="hidden mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+
+    <form id="register-form" class="space-y-5">
+      <div>
+        <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Organization</p>
+        <input name="org_name" placeholder="Organization / hospital group name" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">First Hospital / Facility</p>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <input name="hospital_name" placeholder="Hospital name" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <input name="hospital_code" placeholder="Short code (e.g. MSA-01)" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <select name="hospital_level" class="border border-slate-300 rounded px-3 py-2 text-sm">
+            {% for lvl in levels %}
+            <option value="{{ lvl }}">{{ lvl }}</option>
+            {% endfor %}
+          </select>
+          <input name="county" placeholder="County / region" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Your Account (CEO / Owner)</p>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <input name="admin_full_name" placeholder="Full name" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <input name="admin_username" placeholder="Username" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+        <input name="admin_email" type="email" placeholder="Email" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm mb-3">
+        <input name="admin_password" type="password" placeholder="Password (min. 8 characters)" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+
+      <button type="submit"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 rounded transition">
+        Create Organization
+      </button>
+    </form>
+
+    <p class="text-xs text-slate-400 mt-4 text-center">
+      Already have an account? <a href="{{ url_for('auth.login') }}" class="text-emerald-700 hover:underline">Log in</a>
+    </p>
+  </div>
+</div>
+
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('register-error');
+  errorBox.classList.add('hidden');
+
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+
+  const res = await fetch("{{ url_for('auth.register_organization') }}", {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    window.location.href = data.redirect;
+  } else {
+    errorBox.textContent = data.error || 'Could not create your organization.';
+    errorBox.classList.remove('hidden');
+  }
+});
+</script>
+{% endblock %}

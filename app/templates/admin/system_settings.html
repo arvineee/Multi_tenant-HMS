@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Pricing & System Settings{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Pricing & System Settings</h1>
+<p class="text-sm text-slate-500 mb-6">Money-related settings, in one place, visible only to the system owner.</p>
+
+<div class="bg-white rounded-lg shadow p-6 max-w-2xl mb-6">
+  <h2 class="font-semibold mb-4">General pricing</h2>
+  <form id="pricing-form" class="space-y-4">
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Currency</label>
+        <input name="currency" value="{{ hospital.get_setting('currency', 'KES') if hospital else 'KES' }}"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Default Consultation Fee</label>
+        <input name="default_consultation_fee" type="number" step="0.01" value="{{ hospital.get_setting('default_consultation_fee', '') if hospital else '' }}"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Pharmacy low-stock reorder threshold</label>
+      <input name="low_stock_threshold" type="number" step="1" min="0"
+             value="{{ hospital.get_setting('low_stock_threshold', '') if hospital else '' }}"
+             placeholder="Default: 10" class="w-full max-w-xs border border-slate-300 rounded px-3 py-2 text-sm">
+      <p class="text-xs text-slate-400 mt-1">A drug is flagged low-stock on the pharmacy dashboard once units on hand drop to this level. Leave blank to use the system default (10).</p>
+    </div>
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+      Save
+    </button>
+  </form>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 max-w-2xl mb-6">
+  <h2 class="font-semibold mb-1">Insurance authorization defaults</h2>
+  <p class="text-xs text-slate-500 mb-4">Seeds the pre-authorized amount when a member of this scheme is admitted (billing can still adjust it per stay from the ward workspace once the insurer's actual authorization letter comes in).</p>
+  {% if schemes %}
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-500"><th class="pb-2">Scheme</th><th class="pb-2">Default limit</th><th></th></tr></thead>
+    <tbody>
+      {% for s in schemes %}
+      <tr class="border-t">
+        <td class="py-2">{{ s.name }} <span class="text-xs text-slate-400">({{ s.scheme_type or '—' }})</span></td>
+        <td class="py-2">
+          <input type="number" step="0.01" id="limit-{{ s.id }}" value="{{ s.default_credit_limit if s.default_credit_limit is not none else '' }}"
+                 placeholder="No limit" class="w-32 border border-slate-300 rounded px-2 py-1 text-sm">
+        </td>
+        <td class="py-2 text-right">
+          <button onclick="saveLimit({{ s.id }})" class="text-emerald-700 hover:underline text-xs font-semibold">Save</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-slate-400 text-sm">No insurance schemes set up yet — add one from Diagnosis / Drug / Radiology Catalogs.</p>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+  <h2 class="font-semibold mb-2">Other pricing</h2>
+  <p class="text-xs text-slate-500 mb-3">These stay on their own catalog pages since each price is tied to a specific item, not a single hospital-wide number:</p>
+  <ul class="text-sm space-y-1">
+    <li>· <a href="{{ url_for('admin.catalogs') }}" class="text-emerald-700 hover:underline">Ward daily bed rates, lab test prices, radiology test prices</a></li>
+    <li>· <a href="{{ url_for('pharmacy.stock_overview') }}" class="text-emerald-700 hover:underline">Drug selling prices</a> — set per stock batch at receiving, since cost (and therefore margin) can change with every delivery.</li>
+  </ul>
+</div>
+
+<script>
+document.getElementById('pricing-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON("{{ url_for('admin.system_settings_update') }}", Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Saved.');
+  } else {
+    showToast(data.error || 'Could not save.', true);
+  }
+});
+
+async function saveLimit(schemeId) {
+  const value = document.getElementById(`limit-${schemeId}`).value;
+  const data = await postJSON(`/system-settings/insurance/${schemeId}/limit`, { default_credit_limit: value });
+  if (data.success) {
+    showToast('Saved.');
+  } else {
+    showToast(data.error || 'Could not save.', true);
+  }
+}
+</script>
+{% endblock %}

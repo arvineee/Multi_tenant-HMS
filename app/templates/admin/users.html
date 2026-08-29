@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Staff & Roles{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Staff & Roles</h1>
+  <button onclick="document.getElementById('add-modal').classList.remove('hidden')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    + Add Staff
+  </button>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">Name</th>
+        <th class="px-4 py-3">Username</th>
+        <th class="px-4 py-3">Role</th>
+        <th class="px-4 py-3">Hospital</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr class="border-t border-slate-100" id="user-row-{{ u.id }}">
+        <td class="px-4 py-3 font-medium">{{ u.full_name }}</td>
+        <td class="px-4 py-3">{{ u.username }}</td>
+        <td class="px-4 py-3">{{ u.role.name }}</td>
+        <td class="px-4 py-3">{{ u.hospital.name if u.hospital else 'Head Office' }}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-1 rounded text-xs {{ 'bg-emerald-100 text-emerald-700' if u.is_active else 'bg-red-100 text-red-700' }}">
+            {{ 'Active' if u.is_active else 'Inactive' }}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <button onclick="toggleActive({{ u.id }})" class="text-xs text-emerald-700 hover:underline">Toggle</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="add-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <h2 class="font-bold text-lg mb-4">Add Staff Member</h2>
+    <form id="user-form" class="space-y-3">
+      <input name="full_name" placeholder="Full name" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="username" placeholder="Username" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="email" type="email" placeholder="Email" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="phone" placeholder="Phone" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <select name="role_id" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <option value="">Select role...</option>
+        {% for r in roles %}
+        <option value="{{ r.id }}">{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <select name="hospital_id" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <option value="">Head Office (CEO-level, no hospital)</option>
+        {% for h in hospitals %}
+        <option value="{{ h.id }}">{{ h.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-slate-500">A temporary password is generated. The staff member must change it on first login.</p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('add-modal').classList.add('hidden')"
+                class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('user-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  const data = await postJSON("{{ url_for('admin.users_create') }}", payload);
+  if (data.success) {
+    showToast('Staff added. Temp password: ' + data.temp_password);
+    setTimeout(() => window.location.reload(), 1500);
+  } else {
+    showToast(data.error || 'Could not add staff.', true);
+  }
+});
+
+async function toggleActive(userId) {
+  const data = await postJSON(`/admin/users/${userId}/toggle-active`, {});
+  if (data.success) {
+    showToast('Status updated.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not update status.', true);
+  }
+}
+</script>
+{% endblock %}

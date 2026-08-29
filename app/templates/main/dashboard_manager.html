@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Hospital Overview{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Hospital Overview</h1>
+<p class="text-sm text-slate-500 mb-6">Your assigned hospital{{ 's' if stats|length > 1 else '' }} — live status.</p>
+
+<div class="space-y-6">
+  {% for row in stats %}
+  <div class="bg-white rounded-lg shadow p-5">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <p class="font-semibold text-lg">{{ row.hospital.name }}</p>
+        <p class="text-xs text-slate-500">{{ row.hospital.level }} · {{ row.hospital.county or '-' }}</p>
+      </div>
+      <a href="{{ url_for('admin.settings') }}" class="text-xs text-emerald-700 hover:underline">Settings &rarr;</a>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Active Staff</p>
+        <p class="text-xl font-bold">{{ row.staff_count }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Visits Today</p>
+        <p class="text-xl font-bold">{{ row.visits_today }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">In Queue Now</p>
+        <p class="text-xl font-bold">{{ row.active_visits }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Beds Occupied</p>
+        <p class="text-xl font-bold">{{ row.occupied_beds }}/{{ row.total_beds }}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Revenue Today</p>
+        <p class="text-lg font-semibold">KES {{ '{:,.0f}'.format(row.revenue_today) }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Revenue This Month</p>
+        <p class="text-lg font-semibold">KES {{ '{:,.0f}'.format(row.revenue_month) }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Outstanding Bills</p>
+        <p class="text-lg font-semibold {{ 'text-red-600' if row.outstanding_balance > 0 else '' }}">KES {{ '{:,.0f}'.format(row.outstanding_balance) }}</p>
+      </div>
+      <div class="border border-slate-100 rounded p-3">
+        <p class="text-xs text-slate-500">Unpaid Bill Count</p>
+        <p class="text-lg font-semibold">{{ row.pending_bills_count }}</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 text-xs">
+      <span class="px-2 py-1 rounded {{ 'bg-amber-100 text-amber-700' if row.pending_lab_count > 0 else 'bg-slate-100 text-slate-500' }}">{{ row.pending_lab_count }} lab orders pending</span>
+      <span class="px-2 py-1 rounded {{ 'bg-amber-100 text-amber-700' if row.pending_radiology_count > 0 else 'bg-slate-100 text-slate-500' }}">{{ row.pending_radiology_count }} radiology pending</span>
+      <span class="px-2 py-1 rounded {{ 'bg-amber-100 text-amber-700' if row.pending_prescriptions_count > 0 else 'bg-slate-100 text-slate-500' }}">{{ row.pending_prescriptions_count }} prescriptions pending</span>
+      <span class="px-2 py-1 rounded {{ 'bg-red-100 text-red-700' if row.unbilled_visits_count > 0 else 'bg-slate-100 text-slate-500' }}">{{ row.unbilled_visits_count }} visits awaiting billing</span>
+      {% if row.low_stock_count > 0 %}
+      <span class="px-2 py-1 rounded bg-red-100 text-red-700">⚠ {{ row.low_stock_count }} drug(s) low stock</span>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="text-sm text-slate-500">No hospital assigned to your account yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

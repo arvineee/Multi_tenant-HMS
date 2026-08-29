@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ doc.document_type }} — {{ doc.patient.full_name }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0 !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 py-8 px-4">
+
+<div class="no-print max-w-3xl mx-auto mb-4 flex justify-between items-center">
+  <a href="javascript:history.back()" class="text-sm text-emerald-700 hover:underline">&larr; Back</a>
+  <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    Print / Save as PDF
+  </button>
+</div>
+
+<div class="bg-white max-w-3xl mx-auto p-10 shadow print:shadow-none" style="min-height: 29.7cm;">
+
+  <!-- Letterhead -->
+  <div class="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold">{{ doc.hospital.name }}</h1>
+      <p class="text-xs text-slate-500">{{ doc.hospital.level }}{% if doc.hospital.address %} · {{ doc.hospital.address }}{% endif %}</p>
+      <p class="text-xs text-slate-500">
+        {% if doc.hospital.phone %}Tel: {{ doc.hospital.phone }}{% endif %}
+        {% if doc.hospital.email %} · {{ doc.hospital.email }}{% endif %}
+      </p>
+    </div>
+    <div class="text-right text-xs text-slate-500">
+      <p class="font-mono font-semibold">{{ doc.document_number }}</p>
+      <p>{{ doc.issued_at.strftime('%d %B %Y') }}</p>
+    </div>
+  </div>
+
+  <h2 class="text-lg font-bold text-center uppercase tracking-wide mb-6">{{ doc.document_type }}</h2>
+
+  <!-- Patient details -->
+  <table class="text-sm mb-6 w-full">
+    <tr>
+      <td class="py-1 text-slate-500 w-40">Patient Name</td>
+      <td class="py-1 font-medium">{{ doc.patient.full_name }}</td>
+      <td class="py-1 text-slate-500 w-32">Patient No.</td>
+      <td class="py-1 font-mono">{{ doc.patient.patient_number }}</td>
+    </tr>
+    <tr>
+      <td class="py-1 text-slate-500">Age / Gender</td>
+      <td class="py-1">{{ doc.patient.age if doc.patient.age is not none else '-' }} / {{ doc.patient.gender or '-' }}</td>
+      <td class="py-1 text-slate-500">National ID</td>
+      <td class="py-1">{{ doc.patient.national_id or '-' }}</td>
+    </tr>
+  </table>
+
+  {% if doc.document_type == 'Sick Off' %}
+  <p class="text-sm leading-relaxed mb-4">
+    This is to certify that <strong>{{ doc.patient.full_name }}</strong> was examined at this facility
+    and found to be medically unfit for duty
+    {% if doc.diagnosis_code %}due to <strong>{{ doc.diagnosis_code.description }}</strong>{% endif %}.
+  </p>
+  <table class="text-sm mb-4">
+    <tr><td class="py-1 text-slate-500 w-40">Period of Sick Leave</td>
+        <td class="py-1 font-medium">{{ doc.date_from.strftime('%d %b %Y') }} to {{ doc.date_to.strftime('%d %b %Y') }} ({{ doc.days_count }} day{{ 's' if doc.days_count != 1 }})</td></tr>
+  </table>
+  {% if doc.body_text %}<p class="text-sm mb-4">{{ doc.body_text }}</p>{% endif %}
+  {% if doc.recommendation %}<p class="text-sm mb-4"><span class="font-semibold">Advice:</span> {{ doc.recommendation }}</p>{% endif %}
+
+  {% elif doc.document_type == 'Medical Certificate' %}
+  {% if doc.diagnosis_code %}
+  <p class="text-sm mb-4"><span class="font-semibold">Diagnosis:</span> {{ doc.diagnosis_code.description }} ({{ doc.diagnosis_code.code }})</p>
+  {% endif %}
+  {% if doc.body_text %}<p class="text-sm leading-relaxed mb-4">{{ doc.body_text }}</p>{% endif %}
+  {% if doc.recommendation %}<p class="text-sm mb-4"><span class="font-semibold">Recommendation:</span> {{ doc.recommendation }}</p>{% endif %}
+  {% if doc.follow_up_date %}<p class="text-sm mb-4"><span class="font-semibold">Follow-up:</span> {{ doc.follow_up_date.strftime('%d %b %Y') }}</p>{% endif %}
+
+  {% elif doc.document_type == 'Referral Letter' %}
+  <p class="text-sm mb-4">
+    <span class="font-semibold">Referred to:</span> {{ doc.referred_to_facility or '-' }}
+    {% if doc.referred_to_doctor %}(Attn: {{ doc.referred_to_doctor }}){% endif %}
+  </p>
+  {% if doc.diagnosis_code %}
+  <p class="text-sm mb-4"><span class="font-semibold">Working diagnosis:</span> {{ doc.diagnosis_code.description }} ({{ doc.diagnosis_code.code }})</p>
+  {% endif %}
+  {% if doc.body_text %}<p class="text-sm leading-relaxed mb-4"><span class="font-semibold">Clinical summary / reason for referral:</span><br>{{ doc.body_text }}</p>{% endif %}
+  {% if doc.recommendation %}<p class="text-sm mb-4"><span class="font-semibold">Management so far:</span> {{ doc.recommendation }}</p>{% endif %}
+
+  {% elif doc.document_type == 'Discharge Summary' %}
+  {% if doc.visit.admission %}
+  <table class="text-sm mb-4">
+    <tr><td class="py-1 text-slate-500 w-40">Ward</td><td class="py-1">{{ doc.visit.admission.ward.name }}</td></tr>
+    <tr><td class="py-1 text-slate-500">Admission Date</td><td class="py-1">{{ doc.visit.admission.admission_date.strftime('%d %b %Y') }}</td></tr>
+    <tr><td class="py-1 text-slate-500">Discharge Date</td><td class="py-1">{{ doc.visit.admission.actual_discharge_date.strftime('%d %b %Y') if doc.visit.admission.actual_discharge_date else '-' }}</td></tr>
+  </table>
+  {% endif %}
+  {% if doc.diagnosis_code %}
+  <p class="text-sm mb-4"><span class="font-semibold">Final diagnosis:</span> {{ doc.diagnosis_code.description }} ({{ doc.diagnosis_code.code }})</p>
+  {% endif %}
+  {% if doc.body_text %}<p class="text-sm leading-relaxed mb-4"><span class="font-semibold">Hospital course / treatment given:</span><br>{{ doc.body_text }}</p>{% endif %}
+  {% if doc.recommendation %}<p class="text-sm mb-4"><span class="font-semibold">Discharge instructions:</span> {{ doc.recommendation }}</p>{% endif %}
+  {% if doc.follow_up_date %}<p class="text-sm mb-4"><span class="font-semibold">Follow-up appointment:</span> {{ doc.follow_up_date.strftime('%d %b %Y') }}</p>{% endif %}
+  {% endif %}
+
+  <!-- Signature -->
+  <div class="mt-16 pt-6 border-t border-slate-200 flex justify-between items-end">
+    <div>
+      <p class="text-sm font-semibold">{{ doc.issued_by.full_name }}</p>
+      <p class="text-xs text-slate-500">{{ doc.issued_by.role.name }}</p>
+      <p class="text-xs text-slate-400 mt-4">Signature: _______________________</p>
+    </div>
+    <div class="text-right text-xs text-slate-400">
+      <p>Official Stamp</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

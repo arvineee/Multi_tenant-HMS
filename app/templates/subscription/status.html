@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Subscription{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Subscription</h1>
+<p class="text-sm text-slate-500 mb-6">{{ org.name }} — {{ org.plan_level }} plan</p>
+
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+  <h2 class="font-semibold mb-3">Status</h2>
+
+  {% if org.is_purchased %}
+  <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded px-3 py-2">
+    Owned outright — you purchased this system, no monthly payments, ever.
+  </div>
+  {% elif org.is_trial_active %}
+  <div class="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded px-3 py-2">
+    Free trial — <strong>{{ org.trial_days_remaining }} day{{ 's' if org.trial_days_remaining != 1 }}</strong> remaining.
+  </div>
+  {% elif org.is_subscription_active %}
+  <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded px-3 py-2">
+    Active subscription — paid through {{ org.current_period_end.strftime('%d %b %Y') }}.
+  </div>
+  {% else %}
+  <div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded px-3 py-2">
+    {% if org.subscription_status == 'trial' %}Your free trial has ended.{% else %}Your subscription has expired.{% endif %}
+    Choose an option below to restore access for your whole team.
+  </div>
+  {% endif %}
+
+  {% if recent_payments %}
+  <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-5 mb-2">Recent Payments</h3>
+  <div class="divide-y divide-slate-100 text-sm">
+    {% for p in recent_payments %}
+    <div class="py-1.5 flex justify-between">
+      <span>{{ p.created_at.strftime('%d %b %Y') }} · {{ 'One-time purchase' if p.plan_type == 'purchase' else 'Monthly subscription' }}</span>
+      <span class="{{ 'text-emerald-700' if p.status == 'Completed' else 'text-red-600' if p.status == 'Failed' else 'text-amber-600' }}">
+        KES {{ '{:,.0f}'.format(p.amount) }} — {{ p.status }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if can_pay and not org.is_purchased %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- Monthly subscription -->
+  <div class="bg-white rounded-lg shadow p-5 border-2 {{ 'border-emerald-500' if org.is_subscription_active else 'border-transparent' }}">
+    <h2 class="font-semibold mb-1">Monthly Subscription</h2>
+    <p class="text-2xl font-bold mb-1">{{ 'Free' if monthly_price == 0 else 'KES ' + '{:,.0f}'.format(monthly_price) }}<span class="text-sm font-normal text-slate-500">{{ '' if monthly_price == 0 else '/month' }}</span></p>
+    <p class="text-xs text-slate-500 mb-4">Pay as you go. Cancel anytime — access continues until the paid period ends.</p>
+
+    <div id="pay-error-subscription" class="hidden mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+    <div id="pay-form-subscription" class="space-y-3">
+      {% if monthly_price > 0 %}
+      <input id="phone-subscription" type="tel" placeholder="07XXXXXXXX" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      {% endif %}
+      <button onclick="payNow('subscription')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 rounded">
+        {{ 'Activate Free Plan' if monthly_price == 0 else 'Subscribe Monthly' }}
+      </button>
+    </div>
+    <div id="pay-waiting-subscription" class="hidden text-sm text-slate-600 text-center py-4">
+      <p>Check your phone for the M-Pesa prompt and enter your PIN...</p>
+    </div>
+    <div id="pay-simulate-subscription" class="hidden mt-3 text-center">
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-2">
+        {% if not intasend_configured %}Live payments aren't configured on this install yet — simulate a completed payment for testing.{% endif %}
+      </p>
+      <button class="simulate-btn text-xs px-3 py-1.5 rounded border border-amber-400 text-amber-700 hover:bg-amber-50">
+        Simulate Payment (dev only)
+      </button>
+    </div>
+  </div>
+
+  <!-- One-time purchase -->
+  <div class="bg-white rounded-lg shadow p-5 border-2 border-transparent">
+    <h2 class="font-semibold mb-1">Buy Outright</h2>
+    <p class="text-2xl font-bold mb-1">{{ 'Free' if purchase_price == 0 else 'KES ' + '{:,.0f}'.format(purchase_price) }}<span class="text-sm font-normal text-slate-500">{{ '' if purchase_price == 0 else ' once' }}</span></p>
+    <p class="text-xs text-slate-500 mb-4">One payment, own it permanently. No monthly bills, ever, for this facility level.</p>
+
+    <div id="pay-error-purchase" class="hidden mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+    <div id="pay-form-purchase" class="space-y-3">
+      {% if purchase_price > 0 %}
+      <input id="phone-purchase" type="tel" placeholder="07XXXXXXXX" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      {% endif %}
+      <button onclick="payNow('purchase')" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold py-2 rounded">
+        {{ 'Activate Free Plan' if purchase_price == 0 else 'Buy Once' }}
+      </button>
+    </div>
+    <div id="pay-waiting-purchase" class="hidden text-sm text-slate-600 text-center py-4">
+      <p>Check your phone for the M-Pesa prompt and enter your PIN...</p>
+    </div>
+    <div id="pay-simulate-purchase" class="hidden mt-3 text-center">
+      <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-2">
+        {% if not intasend_configured %}Live payments aren't configured on this install yet — simulate a completed payment for testing.{% endif %}
+      </p>
+      <button class="simulate-btn text-xs px-3 py-1.5 rounded border border-amber-400 text-amber-700 hover:bg-amber-50">
+        Simulate Payment (dev only)
+      </button>
+    </div>
+  </div>
+
+</div>
+{% elif not can_pay and not org.is_purchased %}
+<div class="bg-white rounded-lg shadow p-5">
+  <p class="text-sm text-slate-600">Ask your organization's CEO, Hospital Manager, or Admin to renew or purchase the subscription.</p>
+</div>
+{% endif %}
+
+<script>
+let currentPaymentId = null;
+let pollTimer = null;
+let activePlanType = null;
+
+async function payNow(planType) {
+  activePlanType = planType;
+  const errBox = document.getElementById(`pay-error-${planType}`);
+  errBox.classList.add('hidden');
+
+  const phoneInput = document.getElementById(`phone-${planType}`);
+  const phoneNumber = phoneInput ? phoneInput.value : '';
+
+  const data = await postJSON("{{ url_for('subscription.checkout') }}", { phone_number: phoneNumber, plan_type: planType });
+
+  if (data.success && data.free) {
+    showToast(data.message);
+    setTimeout(() => window.location.href = '/', 1000);
+    return;
+  }
+
+  if (data.success) {
+    currentPaymentId = data.payment_id;
+    document.getElementById(`pay-form-${planType}`).classList.add('hidden');
+    document.getElementById(`pay-waiting-${planType}`).classList.remove('hidden');
+    pollTimer = setInterval(() => pollStatus(planType), 3000);
+  } else {
+    errBox.textContent = data.error || 'Could not start payment.';
+    errBox.classList.remove('hidden');
+    if (data.simulate_available && data.payment_id) {
+      currentPaymentId = data.payment_id;
+      const simBox = document.getElementById(`pay-simulate-${planType}`);
+      simBox.classList.remove('hidden');
+      simBox.querySelector('.simulate-btn').onclick = simulatePayment;
+    }
+  }
+}
+
+async function pollStatus(planType) {
+  if (!currentPaymentId) return;
+  const res = await fetch(`/subscription/poll/${currentPaymentId}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+  const data = await res.json();
+  if (data.status === 'Completed') {
+    clearInterval(pollTimer);
+    showToast('Payment received — access restored.');
+    setTimeout(() => window.location.href = '/', 1000);
+  } else if (data.status === 'Failed') {
+    clearInterval(pollTimer);
+    document.getElementById(`pay-waiting-${planType}`).classList.add('hidden');
+    document.getElementById(`pay-form-${planType}`).classList.remove('hidden');
+    showToast('Payment failed or was cancelled. Try again.', true);
+  }
+}
+
+async function simulatePayment() {
+  const data = await postJSON(`/subscription/simulate/${currentPaymentId}`, {});
+  if (data.success) {
+    showToast('Simulated payment marked complete.');
+    setTimeout(() => window.location.href = '/', 800);
+  } else {
+    showToast(data.error || 'Could not simulate payment.', true);
+  }
+}
+</script>
+{% endblock %}

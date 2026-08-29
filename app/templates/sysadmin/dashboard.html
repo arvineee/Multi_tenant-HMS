@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}System Maintenance{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">System Maintenance</h1>
+<p class="text-sm text-slate-500 mb-6">Platform-wide diagnostics — every hospital, every organization. Visible only to System Maintainer accounts.</p>
+
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+  <h2 class="font-semibold mb-3">System info</h2>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+    <div><p class="text-slate-400 text-xs">Python</p><p class="font-medium">{{ info.python_version }}</p></div>
+    <div><p class="text-slate-400 text-xs">Flask</p><p class="font-medium">{{ info.flask_version }}</p></div>
+    <div><p class="text-slate-400 text-xs">SQLAlchemy</p><p class="font-medium">{{ info.sqlalchemy_version }}</p></div>
+    <div><p class="text-slate-400 text-xs">DB engine</p><p class="font-medium">{{ info.db_dialect }}</p></div>
+    <div><p class="text-slate-400 text-xs">Organizations</p><p class="font-medium">{{ info.counts.organizations }}</p></div>
+    <div><p class="text-slate-400 text-xs">Hospitals</p><p class="font-medium">{{ info.counts.hospitals }}</p></div>
+    <div><p class="text-slate-400 text-xs">Users</p><p class="font-medium">{{ info.counts.users }}</p></div>
+    <div><p class="text-slate-400 text-xs">Patients</p><p class="font-medium">{{ info.counts.patients }}</p></div>
+  </div>
+  {% if info.disk %}
+  <div class="grid grid-cols-3 gap-4 text-sm mt-4 pt-4 border-t">
+    <div><p class="text-slate-400 text-xs">Database file size</p><p class="font-medium">{{ info.disk.db_size_mb }} MB</p></div>
+    <div><p class="text-slate-400 text-xs">Disk free</p><p class="font-medium">{{ info.disk.free_gb }} GB</p></div>
+    <div><p class="text-slate-400 text-xs">Disk total</p><p class="font-medium">{{ info.disk.total_gb }} GB</p></div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+  <h2 class="font-semibold mb-1">Data integrity checks</h2>
+  <p class="text-xs text-slate-500 mb-4">Read-only until you press Fix. Each fix is a specific, narrow repair — not a general patch — so it only touches exactly what its check found.</p>
+  <div class="space-y-4">
+    {% for r in results %}
+    <div class="border border-slate-200 rounded p-4">
+      <div class="flex justify-between items-center">
+        <div>
+          <p class="font-medium text-sm">{{ r.label }}</p>
+          {% if r.error %}
+          <p class="text-xs text-red-600 mt-1">Check failed to run: {{ r.error }}</p>
+          {% elif r.issues %}
+          <p class="text-xs text-amber-700 mt-1">{{ r.issues|length }} found</p>
+          {% else %}
+          <p class="text-xs text-emerald-700 mt-1">Clean</p>
+          {% endif %}
+        </div>
+        {% if r.issues and r.fixable %}
+        <button onclick="runFix('{{ r.key }}')" class="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+          Fix {{ r.issues|length }}
+        </button>
+        {% endif %}
+      </div>
+      {% if r.issues %}
+      <ul class="mt-2 text-xs text-slate-600 space-y-1 max-h-40 overflow-y-auto">
+        {% for issue in r.issues[:20] %}
+        <li>· {{ issue.description }}</li>
+        {% endfor %}
+        {% if r.issues|length > 20 %}<li class="text-slate-400">...and {{ r.issues|length - 20 }} more</li>{% endif %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="bg-white rounded-lg shadow p-5">
+  <h2 class="font-semibold mb-3">Recent activity (audit log)</h2>
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-500"><th>Time</th><th>User</th><th>Action</th><th>Record</th><th>Hospital</th></tr></thead>
+    <tbody>
+      {% for a in recent_activity %}
+      <tr class="border-t">
+        <td class="py-1">{{ a.timestamp.strftime('%d %b %H:%M') }}</td>
+        <td>{{ a.user.full_name if a.user else 'System' }}</td>
+        <td>{{ a.action }} {{ a.model_name or '' }}</td>
+        <td>{{ a.record_id or '—' }}</td>
+        <td>{{ a.hospital.name if a.hospital else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="py-4 text-center text-slate-400">No activity recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+async function runFix(key) {
+  if (!confirm('Run this fix now? This changes data immediately.')) return;
+  const data = await postJSON(`/system-maintenance/fix/${key}`, {});
+  if (data.success) {
+    showToast(`Fixed ${data.fixed} item(s).`);
+    setTimeout(() => location.reload(), 600);
+  } else {
+    showToast(data.error || 'Fix failed.', true);
+  }
+}
+</script>
+{% endblock %}

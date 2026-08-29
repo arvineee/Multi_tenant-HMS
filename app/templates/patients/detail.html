@@ -1,0 +1,1269 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.full_name }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('patients.list_patients') }}" class="text-sm text-emerald-700 hover:underline">&larr; Back to Patients</a>
+
+<div class="flex items-start justify-between mt-3 mb-4">
+  <div>
+    <h1 class="text-2xl font-bold">{{ patient.full_name }}</h1>
+    <p class="text-sm text-slate-500 font-mono">{{ patient.patient_number }}</p>
+  </div>
+  {% if current_user.has_permission('patient.register') %}
+  <button onclick="document.getElementById('visit-modal').classList.remove('hidden')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    + New Visit / Check In
+  </button>
+  {% endif %}
+</div>
+
+{% if patient.allergies %}
+<div class="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-4 py-3 mb-6">
+  <span class="font-semibold">⚠ Allergies:</span> {{ patient.allergies }}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-1 space-y-6">
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">Bio-data</h2>
+      <dl class="text-sm space-y-2">
+        <div class="flex justify-between"><dt class="text-slate-500">Gender</dt><dd>{{ patient.gender or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Age</dt><dd>{{ patient.age if patient.age is not none else '-' }}{% if patient.age_is_estimated %} <span class="text-xs text-slate-400">(est.)</span>{% endif %}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Blood group</dt><dd>{{ patient.blood_group or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">National ID</dt><dd>{{ patient.national_id or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Phone</dt><dd>{{ patient.phone or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Address</dt><dd class="text-right">{{ patient.address or '-' }}</dd></div>
+      </dl>
+
+      <h2 class="font-semibold mt-5 mb-3">Next of Kin</h2>
+      <dl class="text-sm space-y-2">
+        <div class="flex justify-between"><dt class="text-slate-500">Name</dt><dd>{{ patient.next_of_kin_name or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Phone</dt><dd>{{ patient.next_of_kin_phone or '-' }}</dd></div>
+        <div class="flex justify-between"><dt class="text-slate-500">Relationship</dt><dd>{{ patient.next_of_kin_relationship or '-' }}</dd></div>
+      </dl>
+
+      <h2 class="font-semibold mt-5 mb-3">Insurance</h2>
+      <dl class="text-sm space-y-2">
+        <div class="flex justify-between"><dt class="text-slate-500">Scheme</dt><dd>{{ patient.insurance_scheme.name if patient.insurance_scheme else 'Cash / Self-pay' }}</dd></div>
+        {% if patient.insurance_member_number %}
+        <div class="flex justify-between"><dt class="text-slate-500">Member No.</dt><dd>{{ patient.insurance_member_number }}</dd></div>
+        {% endif %}
+      </dl>
+    </div>
+
+    <!-- Clinical Summary: keeps the doctor guided without digging through every visit -->
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">Clinical Summary</h2>
+
+      <p class="text-xs font-semibold text-slate-500 mb-1">CHRONIC CONDITIONS</p>
+      <p class="text-sm mb-4">{{ patient.chronic_conditions or 'None recorded' }}</p>
+
+      <p class="text-xs font-semibold text-slate-500 mb-1">DIAGNOSIS HISTORY</p>
+      {% if past_diagnoses %}
+      <ul class="text-sm space-y-1 mb-4">
+        {% for c in past_diagnoses %}
+        <li class="flex justify-between">
+          <span>{{ c.diagnosis_code.description }} <span class="text-xs font-mono text-slate-400">({{ c.diagnosis_code.code }})</span></span>
+          <span class="text-xs text-slate-400">{{ c.created_at.strftime('%d %b %Y') }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-slate-400 mb-4">No past diagnoses on file.</p>
+      {% endif %}
+
+      <p class="text-xs font-semibold text-slate-500 mb-1">RECENT VITALS TREND</p>
+      {% if vitals_trend %}
+      <div class="overflow-x-auto">
+        <table class="text-xs w-full">
+          <thead class="text-slate-400 text-left">
+            <tr><th class="pr-2">Date</th><th class="pr-2">Temp</th><th class="pr-2">BP</th><th class="pr-2">Pulse</th><th>SpO2</th></tr>
+          </thead>
+          <tbody>
+            {% for t in vitals_trend %}
+            <tr class="border-t border-slate-100">
+              <td class="py-1 pr-2">{{ t.created_at.strftime('%d %b') }}</td>
+              <td class="pr-2">{{ t.temperature_c or '-' }}</td>
+              <td class="pr-2">{{ t.bp_systolic or '-' }}/{{ t.bp_diastolic or '-' }}</td>
+              <td class="pr-2">{{ t.pulse_bpm or '-' }}</td>
+              <td>{{ t.spo2_percent or '-' }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-400">No vitals recorded yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-5 lg:col-span-2">
+    <h2 class="font-semibold mb-3">Visit History</h2>
+    <div class="divide-y divide-slate-100 text-sm">
+      {% for v in patient.visits %}
+      <div class="py-4">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <p class="font-medium">{{ v.visit_type }}{% if v.reason %} — {{ v.reason }}{% endif %}</p>
+            <p class="text-xs text-slate-500">{{ v.created_at.strftime('%d %b %Y, %H:%M') }}</p>
+          </div>
+          <div class="text-right">
+            <span class="text-xs px-2 py-1 rounded {{ 'bg-emerald-100 text-emerald-700' if v.status in ('Completed','Discharged') else 'bg-amber-100 text-amber-700' }}">
+              {{ v.status }}
+            </span>
+            <span class="block text-xs px-2 py-1 rounded {{ 'bg-emerald-100 text-emerald-700' if v.current_stage == 'Fully settled' else 'bg-blue-100 text-blue-700' }} mt-1">{{ v.current_stage }}</span>
+          </div>
+        </div>
+
+        {% if v.triage %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <span class="font-semibold">Triage ({{ v.triage.priority }}):</span>
+          Temp {{ v.triage.temperature_c or '-' }}°C ·
+          BP {{ v.triage.bp_systolic or '-' }}/{{ v.triage.bp_diastolic or '-' }} ·
+          Pulse {{ v.triage.pulse_bpm or '-' }} ·
+          SpO2 {{ v.triage.spo2_percent or '-' }}% ·
+          Wt {{ v.triage.weight_kg or '-' }}kg
+          {% if v.triage.bmi %} · BMI {{ v.triage.bmi }}{% endif %}
+        </div>
+        {% endif %}
+
+        {% if v.consultation %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          {% if v.consultation.chief_complaint %}<span class="font-semibold">Complaint:</span> {{ v.consultation.chief_complaint }}<br>{% endif %}
+          {% if v.consultation.history_of_presenting_illness %}<span class="font-semibold">HPI:</span> {{ v.consultation.history_of_presenting_illness }}<br>{% endif %}
+          <span class="font-semibold">Diagnosis:</span>
+          {{ v.consultation.diagnosis_code.description if v.consultation.diagnosis_code else 'Not finalized yet' }}
+          {% if v.consultation.diagnosis_code %}<span class="font-mono">({{ v.consultation.diagnosis_code.code }})</span>{% endif %}
+          {% if v.consultation.additional_diagnoses %}
+          <br><span class="font-semibold">Also:</span>
+          {% for ad in v.consultation.additional_diagnoses %}{{ ad.diagnosis_code.description }} <span class="font-mono">({{ ad.diagnosis_code.code }})</span>{% if not loop.last %}, {% endif %}{% endfor %}
+          {% endif %}
+          {% if v.consultation.treatment_plan %}<br><span class="font-semibold">Plan:</span> {{ v.consultation.treatment_plan }}{% endif %}
+        </div>
+        {% endif %}
+
+        {% if v.lab_orders %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <span class="font-semibold">Lab:</span>
+          {% for o in v.lab_orders %}
+          <div class="mt-1">
+            {{ o.lab_test.name }} —
+            <span class="{{ 'text-emerald-700' if o.status == 'Result Ready' else 'text-amber-700' }}">{{ o.status }}</span>
+            {% if o.result_value %}<br><span class="text-slate-500">Result: {{ o.result_value }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if v.radiology_orders %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <span class="font-semibold">Radiology:</span>
+          {% for o in v.radiology_orders %}
+          <div class="mt-1">
+            {{ o.radiology_test.name }} —
+            <span class="{{ 'text-emerald-700' if o.status == 'Report Ready' else 'text-amber-700' }}">{{ o.status }}</span>
+            {% if o.findings %}<br><span class="text-slate-500">Findings: {{ o.findings }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if v.prescriptions %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          {% for p in v.prescriptions %}
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-semibold">Prescription {{ loop.index }}:</span>
+            <a href="{{ url_for('pharmacy.print_prescription', prescription_id=p.id) }}" target="_blank" class="text-emerald-700 hover:underline">Print &rarr;</a>
+          </div>
+            {% for item in p.items %}
+            <div class="mt-1">
+              {{ item.drug.name }} {{ item.dosage or '' }} — {{ item.frequency or '' }} {% if item.duration %}· {{ item.duration }}{% endif %}
+              <span class="{{ 'text-emerald-700' if item.status == 'Dispensed' else 'text-amber-700' if item.status in ('Pending','Partially Dispensed') else 'text-slate-400' }}">({{ item.status }})</span>
+            </div>
+            {% endfor %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if v.admission %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <div class="flex justify-between items-center mb-1">
+            <span><span class="font-semibold">Admitted:</span> {{ v.admission.ward.name }} · Bed {{ v.admission.bed_label }} · {{ v.admission.status }}</span>
+            <div class="flex gap-2">
+              <a href="{{ url_for('inpatient.admission_workspace', admission_id=v.admission.id) }}" class="text-emerald-700 hover:underline font-semibold">Open ward workspace →</a>
+              {% if v.admission.status == 'Active' %}
+              {% if current_user.has_permission('triage.create') %}
+              <button type="button" onclick="document.getElementById('vitals-modal-{{ v.admission.id }}').classList.remove('hidden')" class="text-emerald-700 hover:underline">+ Vitals</button>
+              <button type="button" onclick="document.getElementById('note-modal-{{ v.admission.id }}').classList.remove('hidden')" class="text-emerald-700 hover:underline">+ Note</button>
+              {% endif %}
+              {% if current_user.has_permission('consultation.create') %}
+              <button type="button" onclick="document.getElementById('transfer-modal-{{ v.admission.id }}').classList.remove('hidden')" class="text-emerald-700 hover:underline">Transfer</button>
+              {% endif %}
+              {% endif %}
+            </div>
+          </div>
+
+          {% if v.admission.transfers %}
+          <div class="mt-1 text-slate-500">
+            {% for t in v.admission.transfers %}
+            <div>Transferred {{ t.from_ward.name if t.from_ward else '-' }} &rarr; {{ t.to_ward.name }} on {{ t.transferred_at.strftime('%d %b, %H:%M') }}{% if t.reason %} ({{ t.reason }}){% endif %}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          {% if v.admission.vitals %}
+          <div class="mt-2">
+            <p class="font-semibold text-slate-500">Vitals log ({{ v.admission.vitals|length }})</p>
+            {% for vt in v.admission.vitals[:3] %}
+            <div class="mt-0.5">{{ vt.recorded_at.strftime('%d %b, %H:%M') }} — Temp {{ vt.temperature_c or '-' }}°C · BP {{ vt.bp_systolic or '-' }}/{{ vt.bp_diastolic or '-' }} · Pulse {{ vt.pulse_bpm or '-' }} · SpO2 {{ vt.spo2_percent or '-' }}%{% if vt.notes %} — {{ vt.notes }}{% endif %}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          {% if v.admission.nursing_notes %}
+          <div class="mt-2">
+            <p class="font-semibold text-slate-500">Nursing notes ({{ v.admission.nursing_notes|length }})</p>
+            {% for n in v.admission.nursing_notes[:3] %}
+            <div class="mt-0.5">{{ n.created_at.strftime('%d %b, %H:%M') }} — {{ n.note }} <span class="text-slate-400">({{ n.author.full_name if n.author else '-' }})</span></div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if v.admission %}
+        <!-- Inpatient vitals modal -->
+        <div id="vitals-modal-{{ v.admission.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+          <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 class="font-bold text-lg mb-4">Record Vitals</h2>
+            <form onsubmit="submitInpatientVitals(event, {{ v.admission.id }})" class="space-y-3">
+              <div class="grid grid-cols-2 gap-3">
+                <input name="temperature_c" type="number" step="0.1" placeholder="Temp (°C)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+                <input name="pulse_bpm" type="number" placeholder="Pulse (bpm)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+                <input name="bp_systolic" type="number" placeholder="BP systolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+                <input name="bp_diastolic" type="number" placeholder="BP diastolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+                <input name="respiratory_rate" type="number" placeholder="Resp. rate" class="border border-slate-300 rounded px-3 py-2 text-sm">
+                <input name="spo2_percent" type="number" placeholder="SpO2 (%)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              </div>
+              <textarea name="notes" placeholder="Notes" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('vitals-modal-{{ v.admission.id }}').classList.add('hidden')" class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Nursing note modal -->
+        <div id="note-modal-{{ v.admission.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+          <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 class="font-bold text-lg mb-4">Nursing Note</h2>
+            <form onsubmit="submitNursingNote(event, {{ v.admission.id }})" class="space-y-3">
+              <textarea name="note" placeholder="Ward round observation..." rows="4" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('note-modal-{{ v.admission.id }}').classList.add('hidden')" class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save Note</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Ward transfer modal -->
+        <div id="transfer-modal-{{ v.admission.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+          <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 class="font-bold text-lg mb-4">Transfer Ward</h2>
+            <form onsubmit="submitTransfer(event, {{ v.admission.id }})" class="space-y-3">
+              <select name="to_ward_id" onchange="loadTransferBeds({{ v.admission.id }}, this.value)" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                <option value="">Select ward...</option>
+                {% for w in wards %}
+                {% if w.id != v.admission.ward_id %}
+                <option value="{{ w.id }}">{{ w.name }} ({{ w.available_beds }}/{{ w.total_beds }} free)</option>
+                {% endif %}
+                {% endfor %}
+              </select>
+              <select name="to_bed_id" id="transfer-bed-{{ v.admission.id }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                <option value="">No specific bed</option>
+              </select>
+              <input name="reason" placeholder="Reason for transfer" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="document.getElementById('transfer-modal-{{ v.admission.id }}').classList.add('hidden')" class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Transfer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if v.documents %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <span class="font-semibold">Documents:</span>
+          {% for doc in v.documents %}
+          <div class="mt-1 flex justify-between items-center">
+            <span>{{ doc.document_type }} <span class="font-mono text-slate-400">{{ doc.document_number }}</span></span>
+            <a href="{{ url_for('documents.print_document', doc_id=doc.id) }}" target="_blank" class="text-emerald-700 hover:underline">Print &rarr;</a>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if v.bill %}
+        <div class="bg-slate-50 rounded px-3 py-2 mb-2 text-xs text-slate-600">
+          <span class="font-semibold">Bill:</span> KES {{ '%.2f' | format(v.bill.total_amount) }} total ·
+          KES {{ '%.2f' | format(v.bill.balance_due) }} balance ·
+          <span class="{{ 'text-emerald-700' if v.bill.status == 'Paid' else 'text-amber-700' }}">{{ v.bill.status }}</span>
+        </div>
+        {% endif %}
+
+        <div class="flex flex-wrap gap-2 mt-2">
+          {% if current_user.has_permission('triage.create') and not v.triage and v.status not in ('Completed','Discharged') %}
+          <button onclick="document.getElementById('triage-modal-{{ v.id }}').classList.remove('hidden')"
+                  class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50">+ Triage</button>
+          {% endif %}
+
+          {% if current_user.has_permission('triage.create') and v.status in ('Waiting', 'Triaged') and triage_relief_drugs %}
+          <button onclick="document.getElementById('relief-modal-{{ v.id }}').classList.remove('hidden')"
+                  class="text-xs px-2 py-1 rounded border border-amber-400 text-amber-700 hover:bg-amber-50">+ Relief medication</button>
+          {% endif %}
+
+          {% if current_user.has_permission('consultation.create') and v.triage and v.status not in ('Completed','Discharged') %}
+          <button onclick="document.getElementById('consult-modal-{{ v.id }}').classList.remove('hidden')"
+                  class="text-xs px-2 py-1 rounded border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium">
+            {{ 'Continue Consultation' if v.consultation else '+ Consultation' }}
+          </button>
+          {% endif %}
+
+          {% if current_user.has_permission('consultation.create') and v.admission and v.admission.status == 'Active' %}
+          <button onclick="dischargePatient({{ v.id }})"
+                  class="text-xs px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50">Discharge</button>
+          {% endif %}
+
+          {% if current_user.has_permission('consultation.create') and v.triage %}
+          <button onclick="document.getElementById('document-modal-{{ v.id }}').classList.remove('hidden')"
+                  class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50">+ Document</button>
+          {% endif %}
+
+          {% if current_user.has_permission('billing.manage') and v.status in ('Completed', 'Admitted', 'Discharged') %}
+            {% if v.bill %}
+            <a href="{{ url_for('billing.bill_detail', bill_id=v.bill.id) }}" class="text-xs px-2 py-1 rounded border border-emerald-600 text-emerald-700 hover:bg-emerald-50">View Bill</a>
+            {% else %}
+            <button onclick="generateBill({{ v.id }})" class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50">Generate Bill</button>
+            {% endif %}
+          {% endif %}
+
+          {% if v.status not in ('Completed', 'Discharged') %}
+          <a href="{{ url_for('clinical.patient_queue') }}" class="text-xs px-2 py-1 rounded text-slate-400 hover:text-emerald-700">
+            See another patient &rarr;
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Triage modal -->
+      <div id="triage-modal-{{ v.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+          <h2 class="font-bold text-lg mb-4">Record Triage</h2>
+          <form onsubmit="submitTriage(event, {{ v.id }})" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <input name="temperature_c" type="number" step="0.1" placeholder="Temp (°C)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="pulse_bpm" type="number" placeholder="Pulse (bpm)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="bp_systolic" type="number" placeholder="BP systolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="bp_diastolic" type="number" placeholder="BP diastolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="respiratory_rate" type="number" placeholder="Resp. rate" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="spo2_percent" type="number" placeholder="SpO2 (%)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="weight_kg" type="number" step="0.1" placeholder="Weight (kg)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="height_cm" type="number" step="0.1" placeholder="Height (cm)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+            </div>
+            <select name="priority" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <option>Normal</option><option>Urgent</option><option>Emergency</option>
+            </select>
+            <textarea name="notes" placeholder="Notes" class="w-full border border-slate-300 rounded px-3 py-2 text-sm" rows="2"></textarea>
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick="document.getElementById('triage-modal-{{ v.id }}').classList.add('hidden')"
+                      class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+              <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save Triage</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Triage relief medication modal -->
+      <div id="relief-modal-{{ v.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+          <h2 class="font-bold text-lg mb-1">Relief medication</h2>
+          <p class="text-xs text-slate-500 mb-4">Protocol drugs only — for symptomatic relief before the doctor sees the patient. Drawn from stock and billed like any other dispense.</p>
+          {% if patient.allergies %}<p class="text-xs text-red-700 font-semibold mb-3">⚠ Allergies: {{ patient.allergies }}</p>{% endif %}
+          <form onsubmit="submitReliefMedication(event, {{ v.id }})" class="space-y-3">
+            <select name="drug_id" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <option value="">Select drug...</option>
+              {% for d in triage_relief_drugs %}
+              <option value="{{ d.id }}">{{ d.name }} {{ d.strength or '' }}</option>
+              {% endfor %}
+            </select>
+            <div class="grid grid-cols-2 gap-2">
+              <input name="dosage" placeholder="Dose (e.g. 500mg)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+              <input name="quantity" type="number" min="1" value="1" placeholder="Qty" class="border border-slate-300 rounded px-3 py-2 text-sm">
+            </div>
+            <input name="notes" placeholder="Notes (optional)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick="document.getElementById('relief-modal-{{ v.id }}').classList.add('hidden')"
+                      class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+              <button type="submit" class="px-4 py-2 text-sm rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold">Give medication</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Medical document modal -->
+      <div id="document-modal-{{ v.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+          <h2 class="font-bold text-lg mb-4">Issue Document</h2>
+          <form id="document-form-{{ v.id }}" class="space-y-3">
+            <select id="doc-type-{{ v.id }}" onchange="toggleDocFields({{ v.id }})" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <option value="Sick Off">Sick Off</option>
+              <option value="Medical Certificate">Medical Certificate</option>
+              <option value="Referral Letter">Referral Letter</option>
+              <option value="Discharge Summary">Discharge Summary</option>
+            </select>
+
+            <div class="relative">
+              <input type="text" id="doc-diagnosis-input-{{ v.id }}" placeholder="Diagnosis (optional) — search ICD-10..."
+                     oninput="searchDocDiagnosis({{ v.id }})"
+                     onblur="setTimeout(() => document.getElementById('doc-diagnosis-results-{{ v.id }}').classList.add('hidden'), 200)"
+                     autocomplete="off" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <input type="hidden" id="doc-diagnosis-id-{{ v.id }}">
+              <div id="doc-diagnosis-results-{{ v.id }}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+            </div>
+
+            <div id="doc-fields-sickoff-{{ v.id }}" class="space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">From</label>
+                  <input type="date" id="doc-date-from-{{ v.id }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">To</label>
+                  <input type="date" id="doc-date-to-{{ v.id }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                </div>
+              </div>
+            </div>
+
+            <div id="doc-fields-referral-{{ v.id }}" class="hidden space-y-2">
+              <input id="doc-referred-facility-{{ v.id }}" placeholder="Referred to facility" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+              <input id="doc-referred-doctor-{{ v.id }}" placeholder="Attn: doctor (optional)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+            </div>
+
+            <textarea id="doc-body-{{ v.id }}" placeholder="Details / clinical summary / hospital course..." rows="3" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+            <textarea id="doc-recommendation-{{ v.id }}" placeholder="Recommendation / advice / discharge instructions (optional)" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+
+            <div id="doc-fields-followup-{{ v.id }}" class="hidden">
+              <label class="block text-xs text-slate-500 mb-1">Follow-up date</label>
+              <input type="date" id="doc-followup-{{ v.id }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t">
+              <button type="button" onclick="document.getElementById('document-modal-{{ v.id }}').classList.add('hidden')"
+                      class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+              <button type="button" onclick="submitDocument({{ v.id }})"
+                      class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Issue & Print</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Consultation modal: history, exam, investigations (lab/radiology), prescriptions, assessment & plan — everything a doctor does in one encounter, in one place -->
+      <div id="consult-modal-{{ v.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+          <h2 class="font-bold text-lg mb-1">Consultation</h2>
+          <p class="text-xs text-slate-500 mb-4">Order labs, imaging, and prescriptions right here — save progress anytime, you don't have to finish in one sitting.</p>
+          <form id="consult-form-{{ v.id }}" class="space-y-5">
+
+            <div>
+              <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">History Taking</p>
+              <div class="space-y-2">
+                <input name="chief_complaint" placeholder="Chief complaint" value="{{ v.consultation.chief_complaint if v.consultation else '' }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                <textarea name="history_of_presenting_illness" placeholder="History of presenting illness — onset, duration, character, associated symptoms, aggravating/relieving factors..." rows="3" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.history_of_presenting_illness if v.consultation else '' }}</textarea>
+                <textarea name="past_medical_history" placeholder="Past medical history" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.past_medical_history if v.consultation else '' }}</textarea>
+                <textarea name="past_surgical_history" placeholder="Past surgical history" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.past_surgical_history if v.consultation else '' }}</textarea>
+                <textarea name="drug_history" placeholder="Drug history — current medications, incl. herbal/OTC" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.drug_history if v.consultation else '' }}</textarea>
+                <textarea name="family_social_history" placeholder="Family & social history — smoking, alcohol, occupation, living situation, relevant family conditions..." rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.family_social_history if v.consultation else '' }}</textarea>
+                <textarea name="review_of_systems" placeholder="Review of systems" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.review_of_systems if v.consultation else '' }}</textarea>
+              </div>
+              {% if patient.allergies or patient.chronic_conditions %}
+              <p class="text-xs text-slate-400 mt-2">
+                Already on file — Allergies: {{ patient.allergies or 'none recorded' }} ·
+                Chronic conditions: {{ patient.chronic_conditions or 'none recorded' }}
+              </p>
+              {% endif %}
+            </div>
+
+            <div>
+              <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Examination</p>
+              <textarea name="examination_notes" placeholder="General and systemic examination findings" rows="3" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.examination_notes if v.consultation else '' }}</textarea>
+              {% if v.triage %}
+              <p class="text-xs text-slate-400 mt-1">
+                Triage vitals — Temp {{ v.triage.temperature_c or '-' }}°C · BP {{ v.triage.bp_systolic or '-' }}/{{ v.triage.bp_diastolic or '-' }} ·
+                Pulse {{ v.triage.pulse_bpm or '-' }} · SpO2 {{ v.triage.spo2_percent or '-' }}%
+              </p>
+              {% endif %}
+            </div>
+
+            <!-- Investigations: lab + radiology ordered right from the consultation -->
+            <div>
+              <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Investigations</p>
+
+              {% if v.lab_orders or v.radiology_orders %}
+              <div class="text-xs text-slate-500 mb-2 space-y-1">
+                {% for o in v.lab_orders %}<div>Lab: {{ o.lab_test.name }} — <span class="{{ 'text-emerald-700' if o.status == 'Result Ready' else 'text-amber-700' }}">{{ o.status }}</span></div>{% endfor %}
+                {% for o in v.radiology_orders %}<div>Radiology: {{ o.radiology_test.name }} — <span class="{{ 'text-emerald-700' if o.status == 'Report Ready' else 'text-amber-700' }}">{{ o.status }}</span></div>{% endfor %}
+              </div>
+              {% endif %}
+
+              <div id="lab-lines-{{ v.id }}" class="space-y-2 mb-2"></div>
+              <button type="button" onclick="addLabLine({{ v.id }})" class="text-xs text-emerald-700 hover:underline mr-4">+ Order lab test</button>
+
+              <div id="rad-lines-{{ v.id }}" class="space-y-2 mb-2 mt-2"></div>
+              <button type="button" onclick="addRadLine({{ v.id }})" class="text-xs text-emerald-700 hover:underline">+ Order radiology</button>
+            </div>
+
+            <!-- Prescriptions -->
+            {% if current_user.has_permission('prescription.create') %}
+            <div>
+              <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Prescriptions</p>
+              <div id="rx-lines-{{ v.id }}" class="space-y-3"></div>
+              <button type="button" onclick="addRxLine({{ v.id }})" class="text-xs text-emerald-700 hover:underline">+ Add drug</button>
+            </div>
+            {% endif %}
+
+            <div>
+              <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Assessment & Plan</p>
+              <div class="space-y-2">
+                <div class="relative">
+                  <input type="text" id="diagnosis-input-{{ v.id }}" placeholder="Search diagnosis by name or ICD-10 code... (required to complete)"
+                         value="{{ (v.consultation.diagnosis_code.code + ' — ' + v.consultation.diagnosis_code.description) if v.consultation and v.consultation.diagnosis_code else '' }}"
+                         oninput="searchDiagnosis({{ v.id }})"
+                         onblur="setTimeout(() => document.getElementById('diagnosis-results-{{ v.id }}').classList.add('hidden'), 200)"
+                         autocomplete="off"
+                         class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                  <input type="hidden" name="diagnosis_code_id" id="diagnosis-id-{{ v.id }}" value="{{ v.consultation.diagnosis_code_id if v.consultation and v.consultation.diagnosis_code_id else '' }}">
+                  <div id="diagnosis-results-{{ v.id }}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-56 overflow-y-auto"></div>
+                </div>
+                <input name="diagnosis_notes" placeholder="Diagnosis notes (optional)" value="{{ v.consultation.diagnosis_notes if v.consultation else '' }}" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+
+                <div id="extra-diagnosis-lines-{{ v.id }}" class="space-y-2">
+                  {% if v.consultation %}
+                  {% for ad in v.consultation.additional_diagnoses %}
+                  <div class="flex gap-2 items-start relative" id="extra-diagnosis-existing-{{ v.id }}-{{ ad.id }}">
+                    <div class="relative flex-1">
+                      <input type="text" class="extra-diag-input w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+                             value="{{ ad.diagnosis_code.code }} — {{ ad.diagnosis_code.description }}" autocomplete="off">
+                      <input type="hidden" class="extra-diag-id" value="{{ ad.diagnosis_code_id }}">
+                      <div class="extra-diag-results hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+                    </div>
+                    <button type="button" class="text-xs text-red-500 hover:underline" onclick="this.closest('.flex').remove()">Remove</button>
+                  </div>
+                  {% endfor %}
+                  {% endif %}
+                </div>
+                <button type="button" onclick="addDiagnosisLine({{ v.id }})" class="text-xs text-emerald-700 hover:underline">+ Add another diagnosis</button>
+
+                <textarea name="treatment_plan" placeholder="Treatment plan" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">{{ v.consultation.treatment_plan if v.consultation else '' }}</textarea>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Follow-up date (optional)</label>
+                  <input name="follow_up_date" type="date" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                </div>
+              </div>
+            </div>
+
+            {% if allows_inpatient and v.status not in ('Admitted', 'Discharged') %}
+            <div class="border-t pt-3">
+              <label class="flex items-center gap-2 text-sm mb-2">
+                <input type="checkbox" name="admit_patient" value="true" onchange="document.getElementById('admit-fields-{{ v.id }}').classList.toggle('hidden', !this.checked)">
+                Admit this patient{% if v.visit_type != 'Inpatient' %} (converts this visit to Inpatient){% endif %}
+              </label>
+              <div id="admit-fields-{{ v.id }}" class="hidden space-y-2">
+                <select name="ward_id" onchange="loadAdmitBeds({{ v.id }}, this.value)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                  <option value="">Select ward...</option>
+                  {% for w in wards %}
+                  <option value="{{ w.id }}">{{ w.name }} ({{ w.available_beds }}/{{ w.total_beds }} free)</option>
+                  {% endfor %}
+                </select>
+                <select name="bed_id" id="admit-bed-select-{{ v.id }}" class="hidden w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                  <option value="">Select bed...</option>
+                </select>
+                <input name="bed_number" id="admit-bed-text-{{ v.id }}" placeholder="Bed number" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Expected discharge date</label>
+                  <input name="expected_discharge_date" type="date" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            <div class="flex justify-end gap-2 pt-2 border-t">
+              <button type="button" onclick="document.getElementById('consult-modal-{{ v.id }}').classList.add('hidden')"
+                      class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+              <button type="button" onclick="submitConsultation({{ v.id }}, 'draft')"
+                      class="px-4 py-2 text-sm rounded border border-emerald-600 text-emerald-700 font-semibold">Save & See Next Patient</button>
+              <button type="button" onclick="submitConsultation({{ v.id }}, 'finalize')"
+                      class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Complete Consultation</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-slate-400 py-4">No visits recorded yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if current_user.has_permission('patient.register') %}
+<div id="visit-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <h2 class="font-bold text-lg mb-4">New Visit</h2>
+    <form id="visit-form" class="space-y-3">
+      <select name="visit_type" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <option>Outpatient</option>
+        {% if allows_inpatient %}<option>Inpatient</option>{% endif %}
+      </select>
+      <input name="reason" placeholder="Reason for visit" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('visit-modal').classList.add('hidden')"
+                class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Check In</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script>
+{% if current_user.has_permission('patient.register') %}
+document.getElementById('visit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  const data = await postJSON("{{ url_for('patients.check_in_visit', patient_id=patient.id) }}", payload);
+  if (data.success) {
+    showToast('Checked in.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not check in.', true);
+  }
+});
+{% endif %}
+
+async function submitTriage(e, visitId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/visits/${visitId}/triage`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Triage recorded.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not save triage.', true);
+  }
+}
+
+async function submitReliefMedication(e, visitId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/visits/${visitId}/triage-relief-medication`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Medication given.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not give medication.', true);
+  }
+}
+
+async function dischargePatient(visitId) {
+  if (!confirm('Discharge this patient?')) return;
+  const data = await postJSON(`/visits/${visitId}/discharge`, {});
+  if (data.success) {
+    showToast('Patient discharged.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not discharge.', true);
+  }
+}
+
+async function generateBill(visitId) {
+  const data = await postJSON(`/visits/${visitId}/generate-bill`, {});
+  if (data.success) {
+    showToast('Bill generated.');
+    window.location.href = `/bills/${data.id}`;
+  } else {
+    showToast(data.error || 'Could not generate bill.', true);
+  }
+}
+
+/* ---------- Inpatient: vitals, nursing notes, ward transfer ---------- */
+
+const WARD_BEDS = {
+  {% for w in wards %}
+  {{ w.id }}: [{% for b in w.beds if b.status == 'Available' %}{ id: {{ b.id }}, label: {{ b.label | tojson }} },{% endfor %}],
+  {% endfor %}
+};
+
+function loadTransferBeds(admissionId, wardId) {
+  const select = document.getElementById(`transfer-bed-${admissionId}`);
+  select.innerHTML = '<option value="">No specific bed</option>';
+  const beds = WARD_BEDS[wardId] || [];
+  beds.forEach((b) => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = b.label;
+    select.appendChild(opt);
+  });
+}
+
+function loadAdmitBeds(visitId, wardId) {
+  const bedSelect = document.getElementById(`admit-bed-select-${visitId}`);
+  const bedText = document.getElementById(`admit-bed-text-${visitId}`);
+  const beds = WARD_BEDS[wardId] || [];
+
+  if (beds.length > 0) {
+    bedSelect.innerHTML = '<option value="">Select bed...</option>';
+    beds.forEach((b) => {
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = b.label;
+      bedSelect.appendChild(opt);
+    });
+    bedSelect.classList.remove('hidden');
+    bedText.classList.add('hidden');
+  } else {
+    bedSelect.classList.add('hidden');
+    bedText.classList.remove('hidden');
+  }
+}
+
+async function submitInpatientVitals(e, admissionId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/admissions/${admissionId}/vitals`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Vitals recorded.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not save vitals.', true);
+  }
+}
+
+async function submitNursingNote(e, admissionId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/admissions/${admissionId}/nursing-notes`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Note saved.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not save note.', true);
+  }
+}
+
+async function submitTransfer(e, admissionId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/admissions/${admissionId}/transfer`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Patient transferred.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not transfer.', true);
+  }
+}
+
+/* ---------- Investigations: lab + radiology typeahead lines inside the consultation ---------- */
+
+const labLineCounters = {};
+const radLineCounters = {};
+const labSearchTimers = {};
+const radSearchTimers = {};
+
+function addLabLine(visitId) {
+  if (!(visitId in labLineCounters)) labLineCounters[visitId] = 0;
+  const idx = labLineCounters[visitId]++;
+  const container = document.getElementById(`lab-lines-${visitId}`);
+  const row = document.createElement('div');
+  row.className = 'flex gap-2 items-start relative';
+  row.id = `lab-line-${visitId}-${idx}`;
+  row.innerHTML = `
+    <div class="relative flex-1">
+      <input type="text" id="lab-input-${visitId}-${idx}" placeholder="Search lab test..." autocomplete="off"
+             class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <input type="hidden" id="lab-select-${visitId}-${idx}">
+      <div id="lab-results-${visitId}-${idx}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+    </div>
+    <input id="lab-note-${visitId}-${idx}" placeholder="Note (optional)" class="flex-1 border border-slate-300 rounded px-2 py-1.5 text-sm">
+    <button type="button" class="text-xs text-red-500 hover:underline" onclick="document.getElementById('lab-line-${visitId}-${idx}').remove()">Remove</button>
+  `;
+  container.appendChild(row);
+
+  const input = document.getElementById(`lab-input-${visitId}-${idx}`);
+  input.addEventListener('input', () => searchLabTest(visitId, idx));
+  input.addEventListener('focus', () => searchLabTest(visitId, idx));
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      const box = document.getElementById(`lab-results-${visitId}-${idx}`);
+      if (box) box.classList.add('hidden');
+    }, 200);
+  });
+}
+
+function searchLabTest(visitId, idx) {
+  const key = `${visitId}-${idx}`;
+  clearTimeout(labSearchTimers[key]);
+  labSearchTimers[key] = setTimeout(async () => {
+    const input = document.getElementById(`lab-input-${visitId}-${idx}`);
+    const resultsBox = document.getElementById(`lab-results-${visitId}-${idx}`);
+    const hiddenId = document.getElementById(`lab-select-${visitId}-${idx}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+
+    const res = await fetch(`/api/lab-test-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    if (!data.results || data.results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-3 py-2 text-xs text-slate-400';
+      empty.textContent = 'No matches';
+      resultsBox.appendChild(empty);
+    } else {
+      data.results.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+        row.textContent = `${r.name} (${r.category || ''})`;
+        row.addEventListener('mousedown', () => {
+          input.value = r.name;
+          hiddenId.value = r.id;
+          resultsBox.classList.add('hidden');
+        });
+        resultsBox.appendChild(row);
+      });
+    }
+    resultsBox.classList.remove('hidden');
+  }, 200);
+}
+
+function addRadLine(visitId) {
+  if (!(visitId in radLineCounters)) radLineCounters[visitId] = 0;
+  const idx = radLineCounters[visitId]++;
+  const container = document.getElementById(`rad-lines-${visitId}`);
+  const row = document.createElement('div');
+  row.className = 'flex gap-2 items-start relative';
+  row.id = `rad-line-${visitId}-${idx}`;
+  row.innerHTML = `
+    <div class="relative flex-1">
+      <input type="text" id="rad-input-${visitId}-${idx}" placeholder="Search radiology test..." autocomplete="off"
+             class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <input type="hidden" id="rad-select-${visitId}-${idx}">
+      <div id="rad-results-${visitId}-${idx}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+    </div>
+    <input id="rad-note-${visitId}-${idx}" placeholder="Note (optional)" class="flex-1 border border-slate-300 rounded px-2 py-1.5 text-sm">
+    <button type="button" class="text-xs text-red-500 hover:underline" onclick="document.getElementById('rad-line-${visitId}-${idx}').remove()">Remove</button>
+  `;
+  container.appendChild(row);
+
+  const input = document.getElementById(`rad-input-${visitId}-${idx}`);
+  input.addEventListener('input', () => searchRadTest(visitId, idx));
+  input.addEventListener('focus', () => searchRadTest(visitId, idx));
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      const box = document.getElementById(`rad-results-${visitId}-${idx}`);
+      if (box) box.classList.add('hidden');
+    }, 200);
+  });
+}
+
+function searchRadTest(visitId, idx) {
+  const key = `${visitId}-${idx}`;
+  clearTimeout(radSearchTimers[key]);
+  radSearchTimers[key] = setTimeout(async () => {
+    const input = document.getElementById(`rad-input-${visitId}-${idx}`);
+    const resultsBox = document.getElementById(`rad-results-${visitId}-${idx}`);
+    const hiddenId = document.getElementById(`rad-select-${visitId}-${idx}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+
+    const res = await fetch(`/api/radiology-test-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    if (!data.results || data.results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-3 py-2 text-xs text-slate-400';
+      empty.textContent = 'No matches available at this facility level';
+      resultsBox.appendChild(empty);
+    } else {
+      data.results.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+        row.textContent = `${r.name} (${r.modality || ''})`;
+        row.addEventListener('mousedown', () => {
+          input.value = r.name;
+          hiddenId.value = r.id;
+          resultsBox.classList.add('hidden');
+        });
+        resultsBox.appendChild(row);
+      });
+    }
+    resultsBox.classList.remove('hidden');
+  }, 200);
+}
+
+/* ---------- Prescriptions: drug typeahead lines inside the consultation ---------- */
+
+const rxLineCounters = {};
+const drugSearchTimers = {};
+
+function addRxLine(visitId) {
+  if (!(visitId in rxLineCounters)) rxLineCounters[visitId] = 0;
+  const lineIdx = rxLineCounters[visitId]++;
+  const container = document.getElementById(`rx-lines-${visitId}`);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'border border-slate-200 rounded p-3 space-y-2 relative';
+  wrapper.id = `rx-line-${visitId}-${lineIdx}`;
+
+  wrapper.innerHTML = `
+    <button type="button" class="absolute top-2 right-2 text-xs text-red-500 hover:underline" onclick="document.getElementById('rx-line-${visitId}-${lineIdx}').remove()">Remove</button>
+    <div class="relative">
+      <input type="text" id="rx-drug-input-${visitId}-${lineIdx}" placeholder="Search drug by name..." autocomplete="off"
+             class="w-full border border-slate-300 rounded px-3 py-2 text-sm pr-16">
+      <input type="hidden" id="rx-drug-id-${visitId}-${lineIdx}">
+      <div id="rx-drug-results-${visitId}-${lineIdx}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <input id="rx-dosage-${visitId}-${lineIdx}" placeholder="Dosage (500mg)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <select id="rx-frequency-${visitId}-${lineIdx}" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <option value="">Frequency...</option>
+        <option>OD</option><option>BD</option><option>TDS</option><option>QDS</option><option>STAT</option><option>PRN</option>
+      </select>
+      <input id="rx-duration-${visitId}-${lineIdx}" placeholder="Duration (5 days)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <input id="rx-quantity-${visitId}-${lineIdx}" type="number" min="1" placeholder="Quantity" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <input id="rx-instructions-${visitId}-${lineIdx}" placeholder="Instructions (after meals)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+    </div>
+  `;
+  container.appendChild(wrapper);
+
+  const input = document.getElementById(`rx-drug-input-${visitId}-${lineIdx}`);
+  input.addEventListener('input', () => searchDrug(visitId, lineIdx));
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      const box = document.getElementById(`rx-drug-results-${visitId}-${lineIdx}`);
+      if (box) box.classList.add('hidden');
+    }, 200);
+  });
+}
+
+function searchDrug(visitId, lineIdx) {
+  const key = `${visitId}-${lineIdx}`;
+  clearTimeout(drugSearchTimers[key]);
+  drugSearchTimers[key] = setTimeout(async () => {
+    const input = document.getElementById(`rx-drug-input-${visitId}-${lineIdx}`);
+    const resultsBox = document.getElementById(`rx-drug-results-${visitId}-${lineIdx}`);
+    const hiddenId = document.getElementById(`rx-drug-id-${visitId}-${lineIdx}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+
+    if (q.length < 2) {
+      resultsBox.classList.add('hidden');
+      return;
+    }
+    const res = await fetch(`/api/drug-search?q=${encodeURIComponent(q)}`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+
+    if (!data.results || data.results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-3 py-2 text-xs text-slate-400';
+      empty.textContent = 'No matches';
+      resultsBox.appendChild(empty);
+    } else {
+      data.results.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+        row.textContent = `${r.name} ${r.strength || ''} (${r.form || ''})`;
+        row.addEventListener('mousedown', () => selectDrug(visitId, lineIdx, r.id, r.name, r.strength));
+        resultsBox.appendChild(row);
+      });
+    }
+    resultsBox.classList.remove('hidden');
+  }, 250);
+}
+
+function selectDrug(visitId, lineIdx, id, name, strength) {
+  document.getElementById(`rx-drug-input-${visitId}-${lineIdx}`).value = `${name} ${strength || ''}`.trim();
+  document.getElementById(`rx-drug-id-${visitId}-${lineIdx}`).value = id;
+  document.getElementById(`rx-drug-results-${visitId}-${lineIdx}`).classList.add('hidden');
+}
+
+/* ---------- Diagnosis typeahead (Assessment & Plan) ---------- */
+
+const diagnosisSearchTimers = {};
+
+function searchDiagnosis(visitId) {
+  clearTimeout(diagnosisSearchTimers[visitId]);
+  diagnosisSearchTimers[visitId] = setTimeout(async () => {
+    const input = document.getElementById(`diagnosis-input-${visitId}`);
+    const resultsBox = document.getElementById(`diagnosis-results-${visitId}`);
+    const hiddenId = document.getElementById(`diagnosis-id-${visitId}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+
+    if (q.length < 2) {
+      resultsBox.classList.add('hidden');
+      return;
+    }
+    const res = await fetch(`/api/diagnosis-search?q=${encodeURIComponent(q)}`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+
+    if (!data.results || data.results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-3 py-2 text-xs text-slate-400';
+      empty.textContent = 'No matches';
+      resultsBox.appendChild(empty);
+    } else {
+      data.results.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+        const codeSpan = document.createElement('span');
+        codeSpan.className = 'font-mono text-slate-400';
+        codeSpan.textContent = r.code;
+        row.appendChild(codeSpan);
+        row.appendChild(document.createTextNode(' — ' + r.description));
+        row.addEventListener('mousedown', () => selectDiagnosis(visitId, r.id, r.code, r.description));
+        resultsBox.appendChild(row);
+      });
+    }
+    resultsBox.classList.remove('hidden');
+  }, 250);
+}
+
+function selectDiagnosis(visitId, id, code, description) {
+  document.getElementById(`diagnosis-input-${visitId}`).value = `${code} — ${description}`;
+  document.getElementById(`diagnosis-id-${visitId}`).value = id;
+  document.getElementById(`diagnosis-results-${visitId}`).classList.add('hidden');
+}
+
+/* ---------- Additional/secondary diagnoses (multi-diagnosis support) ---------- */
+
+function addDiagnosisLine(visitId) {
+  const container = document.getElementById(`extra-diagnosis-lines-${visitId}`);
+  const row = document.createElement('div');
+  row.className = 'flex gap-2 items-start relative';
+  row.innerHTML = `
+    <div class="relative flex-1">
+      <input type="text" class="extra-diag-input w-full border border-slate-300 rounded px-2 py-1.5 text-sm" placeholder="Search diagnosis by name or ICD-10 code..." autocomplete="off">
+      <input type="hidden" class="extra-diag-id">
+      <div class="extra-diag-results hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+    </div>
+    <button type="button" class="text-xs text-red-500 hover:underline" onclick="this.closest('.flex').remove()">Remove</button>
+  `;
+  container.appendChild(row);
+  wireExtraDiagnosisRow(row);
+}
+
+function wireExtraDiagnosisRow(row) {
+  const input = row.querySelector('.extra-diag-input');
+  const hiddenId = row.querySelector('.extra-diag-id');
+  const resultsBox = row.querySelector('.extra-diag-results');
+  let timer = null;
+
+  input.addEventListener('input', () => {
+    hiddenId.value = '';
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = input.value.trim();
+      if (q.length < 2) {
+        resultsBox.classList.add('hidden');
+        return;
+      }
+      const res = await fetch(`/api/diagnosis-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const data = await res.json();
+      resultsBox.innerHTML = '';
+      if (!data.results || data.results.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'px-3 py-2 text-xs text-slate-400';
+        empty.textContent = 'No matches';
+        resultsBox.appendChild(empty);
+      } else {
+        data.results.forEach((r) => {
+          const item = document.createElement('div');
+          item.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+          item.textContent = `${r.code} — ${r.description}`;
+          item.addEventListener('mousedown', () => {
+            input.value = `${r.code} — ${r.description}`;
+            hiddenId.value = r.id;
+            resultsBox.classList.add('hidden');
+          });
+          resultsBox.appendChild(item);
+        });
+      }
+      resultsBox.classList.remove('hidden');
+    }, 200);
+  });
+  input.addEventListener('blur', () => setTimeout(() => resultsBox.classList.add('hidden'), 200));
+}
+
+// wire up any server-rendered existing secondary-diagnosis rows on page load
+document.querySelectorAll('[id^="extra-diagnosis-existing-"]').forEach(wireExtraDiagnosisRow);
+
+/* ---------- Document typeahead + submit ---------- */
+
+function toggleDocFields(visitId) {
+  const type = document.getElementById(`doc-type-${visitId}`).value;
+  document.getElementById(`doc-fields-sickoff-${visitId}`).classList.toggle('hidden', type !== 'Sick Off');
+  document.getElementById(`doc-fields-referral-${visitId}`).classList.toggle('hidden', type !== 'Referral Letter');
+  document.getElementById(`doc-fields-followup-${visitId}`).classList.toggle('hidden', !['Medical Certificate', 'Discharge Summary'].includes(type));
+}
+
+const docDiagnosisSearchTimers = {};
+
+function searchDocDiagnosis(visitId) {
+  clearTimeout(docDiagnosisSearchTimers[visitId]);
+  docDiagnosisSearchTimers[visitId] = setTimeout(async () => {
+    const input = document.getElementById(`doc-diagnosis-input-${visitId}`);
+    const resultsBox = document.getElementById(`doc-diagnosis-results-${visitId}`);
+    const hiddenId = document.getElementById(`doc-diagnosis-id-${visitId}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+    if (q.length < 2) {
+      resultsBox.classList.add('hidden');
+      return;
+    }
+    const res = await fetch(`/api/diagnosis-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    if (!data.results || data.results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'px-3 py-2 text-xs text-slate-400';
+      empty.textContent = 'No matches';
+      resultsBox.appendChild(empty);
+    } else {
+      data.results.forEach((r) => {
+        const row = document.createElement('div');
+        row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+        row.textContent = `${r.code} — ${r.description}`;
+        row.addEventListener('mousedown', () => {
+          document.getElementById(`doc-diagnosis-input-${visitId}`).value = `${r.code} — ${r.description}`;
+          document.getElementById(`doc-diagnosis-id-${visitId}`).value = r.id;
+          resultsBox.classList.add('hidden');
+        });
+        resultsBox.appendChild(row);
+      });
+    }
+    resultsBox.classList.remove('hidden');
+  }, 250);
+}
+
+async function submitDocument(visitId) {
+  const payload = {
+    document_type: document.getElementById(`doc-type-${visitId}`).value,
+    diagnosis_code_id: document.getElementById(`doc-diagnosis-id-${visitId}`).value,
+    date_from: document.getElementById(`doc-date-from-${visitId}`).value,
+    date_to: document.getElementById(`doc-date-to-${visitId}`).value,
+    referred_to_facility: document.getElementById(`doc-referred-facility-${visitId}`).value,
+    referred_to_doctor: document.getElementById(`doc-referred-doctor-${visitId}`).value,
+    body_text: document.getElementById(`doc-body-${visitId}`).value,
+    recommendation: document.getElementById(`doc-recommendation-${visitId}`).value,
+    follow_up_date: document.getElementById(`doc-followup-${visitId}`).value,
+  };
+  const data = await postJSON(`/visits/${visitId}/documents`, payload);
+  if (data.success) {
+    showToast('Document issued.');
+    window.open(`/documents/${data.id}/print`, '_blank');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not issue document.', true);
+  }
+}
+
+/* ---------- Consultation submit: saves the note, then fires off any investigation/prescription lines added ---------- */
+
+async function submitConsultation(visitId, action) {
+  const form = document.getElementById(`consult-form-${visitId}`);
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  payload.action = action;
+
+  // collect any additional/secondary diagnoses added to this consultation
+  const extraContainer = document.getElementById(`extra-diagnosis-lines-${visitId}`);
+  const additionalDiagnoses = [];
+  if (extraContainer) {
+    extraContainer.querySelectorAll('.extra-diag-id').forEach((hiddenInput) => {
+      if (hiddenInput.value) additionalDiagnoses.push({ diagnosis_code_id: hiddenInput.value });
+    });
+  }
+  payload.additional_diagnoses = additionalDiagnoses;
+
+  const consultResult = await postJSON(`/visits/${visitId}/consultation`, payload);
+  if (!consultResult.success) {
+    showToast(consultResult.error || 'Could not save consultation.', true);
+    return;
+  }
+
+  const errors = [];
+
+  // fire off any lab/radiology/prescription lines added in this session
+  const labLines = document.querySelectorAll(`[id^="lab-line-${visitId}-"]`);
+  for (const line of labLines) {
+    const idx = line.id.split('-').pop();
+    const testId = document.getElementById(`lab-select-${visitId}-${idx}`).value;
+    if (!testId) continue;
+    const note = document.getElementById(`lab-note-${visitId}-${idx}`).value;
+    const r = await postJSON(`/visits/${visitId}/lab-orders`, { lab_test_id: testId, clinical_notes: note });
+    if (!r.success) errors.push(r.error || 'Could not order a lab test.');
+  }
+
+  const radLines = document.querySelectorAll(`[id^="rad-line-${visitId}-"]`);
+  for (const line of radLines) {
+    const idx = line.id.split('-').pop();
+    const testId = document.getElementById(`rad-select-${visitId}-${idx}`).value;
+    if (!testId) continue;
+    const note = document.getElementById(`rad-note-${visitId}-${idx}`).value;
+    const r = await postJSON(`/visits/${visitId}/radiology-orders`, { radiology_test_id: testId, clinical_notes: note });
+    if (!r.success) errors.push(r.error || 'Could not order a radiology test.');
+  }
+
+  const rxContainer = document.getElementById(`rx-lines-${visitId}`);
+  if (rxContainer) {
+    const rxLines = rxContainer.querySelectorAll(`[id^="rx-line-${visitId}-"]`);
+    const items = [];
+    rxLines.forEach((line) => {
+      const idx = line.id.split('-').pop();
+      const drugId = document.getElementById(`rx-drug-id-${visitId}-${idx}`).value;
+      if (!drugId) return;
+      items.push({
+        drug_id: drugId,
+        dosage: document.getElementById(`rx-dosage-${visitId}-${idx}`).value,
+        frequency: document.getElementById(`rx-frequency-${visitId}-${idx}`).value,
+        duration: document.getElementById(`rx-duration-${visitId}-${idx}`).value,
+        quantity: document.getElementById(`rx-quantity-${visitId}-${idx}`).value || 1,
+        instructions: document.getElementById(`rx-instructions-${visitId}-${idx}`).value,
+      });
+    });
+    if (items.length > 0) {
+      const r = await postJSON(`/visits/${visitId}/prescriptions`, { items });
+      if (!r.success) errors.push(r.error || 'Could not save prescription.');
+    }
+  }
+
+  if (errors.length > 0) {
+    showToast(errors.join(' '), true);
+  } else {
+    showToast(action === 'draft' ? 'Saved. Visit stays open.' : 'Consultation completed.');
+  }
+  window.location.reload();
+}
+</script>
+{% endblock %}

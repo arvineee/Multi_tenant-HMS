@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Radiology Worklist{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Radiology Worklist</h1>
+<p class="text-sm text-slate-500 mb-6">Pending imaging orders across your hospital.</p>
+
+<div class="space-y-3">
+  {% for o in orders %}
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <p class="font-medium">{{ o.radiology_test.name }} <span class="text-xs text-slate-400">({{ o.radiology_test.modality }})</span></p>
+        <p class="text-xs text-slate-500">
+          <a href="{{ url_for('patients.patient_detail', patient_id=o.patient_id) }}" class="text-emerald-700 hover:underline">{{ o.patient.full_name }}</a>
+          · Ordered {{ o.ordered_at.strftime('%d %b, %H:%M') }} by {{ o.ordered_by.full_name if o.ordered_by else '-' }}
+        </p>
+        {% if o.clinical_notes %}<p class="text-xs text-slate-500 mt-1">Note: {{ o.clinical_notes }}</p>{% endif %}
+      </div>
+      <select onchange="updateRadStatus({{ o.id }}, this.value)" class="text-xs border border-slate-300 rounded px-2 py-1">
+        {% for s in ['Ordered', 'In Progress'] %}
+        <option value="{{ s }}" {{ 'selected' if o.status == s }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button onclick="document.getElementById('report-modal-{{ o.id }}').classList.remove('hidden')"
+            class="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+      Enter Findings
+    </button>
+  </div>
+
+  <div id="report-modal-{{ o.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+      <h2 class="font-bold text-lg mb-4">{{ o.radiology_test.name }} — {{ o.patient.full_name }}</h2>
+      <form onsubmit="submitRadReport(event, {{ o.id }})" class="space-y-3">
+        <textarea name="findings" placeholder="Findings / report" rows="4" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="document.getElementById('report-modal-{{ o.id }}').classList.add('hidden')"
+                  class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save Findings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-slate-400 text-center py-8">No pending radiology orders.</p>
+  {% endfor %}
+</div>
+
+<script>
+async function updateRadStatus(orderId, status) {
+  const data = await postJSON(`/radiology-orders/${orderId}/status`, { status });
+  if (data.success) { showToast('Status updated.'); } else { showToast(data.error || 'Failed.', true); }
+}
+async function submitRadReport(e, orderId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/radiology-orders/${orderId}/report`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Findings saved.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not save findings.', true);
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Patients{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Patients</h1>
+  {% if current_user.has_permission('patient.register') %}
+  <button onclick="document.getElementById('register-modal').classList.remove('hidden')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    + Register Patient
+  </button>
+  {% endif %}
+</div>
+
+<form method="get" class="mb-4 flex flex-wrap items-center gap-3">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search by name, patient number, phone or ID..."
+         class="w-full max-w-lg border border-slate-300 rounded px-3 py-2 text-sm">
+  {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
+</form>
+
+<div class="flex gap-2 mb-4 text-sm">
+  <a href="{{ url_for('patients.list_patients', q=query) }}"
+     class="px-3 py-1.5 rounded font-medium {{ 'bg-emerald-600 text-white' if not show_archived else 'bg-white border border-slate-300 text-slate-600' }}">Active</a>
+  <a href="{{ url_for('patients.list_patients', q=query, archived=1) }}"
+     class="px-3 py-1.5 rounded font-medium {{ 'bg-emerald-600 text-white' if show_archived else 'bg-white border border-slate-300 text-slate-600' }}">Archive (discharged/completed)</a>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">Patient No.</th>
+        <th class="px-4 py-3">Name</th>
+        <th class="px-4 py-3">Gender</th>
+        <th class="px-4 py-3">Age</th>
+        <th class="px-4 py-3">Phone</th>
+        <th class="px-4 py-3">Latest Visit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in patients %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50 cursor-pointer"
+          onclick="window.location.href='{{ url_for('patients.patient_detail', patient_id=p.id) }}'">
+        <td class="px-4 py-3 font-mono text-xs">{{ p.patient_number }}</td>
+        <td class="px-4 py-3 font-medium">{{ p.full_name }}</td>
+        <td class="px-4 py-3">{{ p.gender or '-' }}</td>
+        <td class="px-4 py-3">{{ p.age if p.age is not none else '-' }}</td>
+        <td class="px-4 py-3">{{ p.phone or '-' }}</td>
+        <td class="px-4 py-3">
+          {% if p.visits %}
+          <span class="px-2 py-1 rounded text-xs bg-amber-100 text-amber-700">{{ p.visits[0].status }}</span>
+          {% else %}
+          <span class="text-xs text-slate-400">No visits</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">{{ 'No archived patients.' if show_archived else 'No patients found.' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if current_user.has_permission('patient.register') %}
+<div id="register-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+    <h2 class="font-bold text-lg mb-4">Register Patient</h2>
+    <div id="register-error" class="hidden mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+    <form id="register-form" class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <input name="first_name" placeholder="First name" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+        <input name="last_name" placeholder="Last name" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <select name="gender" class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <option value="">Gender...</option>
+          <option>Male</option><option>Female</option>
+        </select>
+        <input type="date" name="date_of_birth" id="dob-input"
+               oninput="document.getElementById('age-input').disabled = !!this.value;"
+               class="border border-slate-300 rounded px-3 py-2 text-sm">
+        <input name="blood_group" placeholder="Blood group" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <input type="number" min="0" max="130" name="estimated_age_years" id="age-input"
+                 placeholder="Age (if date of birth unknown)"
+                 class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+          <p class="text-xs text-slate-400 mt-1">Fill in either date of birth or approximate age.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <input name="national_id" placeholder="National ID" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        <input name="phone" placeholder="Phone number" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <input name="address" placeholder="Address" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+
+      <div class="border-t pt-3">
+        <p class="text-xs font-semibold text-slate-500 mb-2">CLINICAL SAFETY</p>
+        <div class="grid grid-cols-2 gap-3">
+          <input name="allergies" placeholder="Known allergies (e.g. Penicillin)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <input name="chronic_conditions" placeholder="Chronic conditions (e.g. Diabetes, HTN)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="border-t pt-3">
+        <p class="text-xs font-semibold text-slate-500 mb-2">NEXT OF KIN</p>
+        <div class="grid grid-cols-3 gap-3">
+          <input name="next_of_kin_name" placeholder="Name" class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <input name="next_of_kin_phone" placeholder="Phone" class="border border-slate-300 rounded px-3 py-2 text-sm">
+          <input name="next_of_kin_relationship" placeholder="Relationship" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="border-t pt-3">
+        <p class="text-xs font-semibold text-slate-500 mb-2">INSURANCE (optional)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <select name="insurance_scheme_id" class="border border-slate-300 rounded px-3 py-2 text-sm">
+            <option value="">Cash / Self-pay</option>
+            {% for s in insurance_schemes %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <input name="insurance_member_number" placeholder="Member number" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="border-t pt-3">
+        <p class="text-xs font-semibold text-slate-500 mb-2">VISIT</p>
+        <div class="grid grid-cols-2 gap-3">
+          <select name="visit_type" class="border border-slate-300 rounded px-3 py-2 text-sm">
+            <option>Outpatient</option>
+            {% if allows_inpatient %}<option>Inpatient</option>{% endif %}
+          </select>
+          <input name="reason" placeholder="Reason for visit" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('register-modal').classList.add('hidden')"
+                class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+          Register & Check In
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('register-error');
+  errorBox.classList.add('hidden');
+
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  const data = await postJSON("{{ url_for('patients.register_patient') }}", payload);
+
+  if (data.success) {
+    showToast('Patient registered: ' + data.patient_number);
+    setTimeout(() => window.location.href = `/patients/${data.id}`, 800);
+  } else {
+    errorBox.textContent = data.error || 'Could not register patient.';
+    errorBox.classList.remove('hidden');
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

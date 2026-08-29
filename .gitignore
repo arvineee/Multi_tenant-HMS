@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+instance/
+*.egg-info/
+.DS_Store
+
+# Local database — back this up separately, don't rely on git for it.
+hospital.db

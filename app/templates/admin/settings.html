@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Hospital Settings{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Hospital Settings</h1>
+
+<div class="bg-white rounded-lg shadow p-6 max-w-2xl">
+  <form id="settings-form" class="space-y-4">
+    <div>
+      <label class="block text-sm font-medium mb-1">Hospital Name</label>
+      <input name="name" value="{{ hospital.name if hospital else '' }}"
+             class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">County</label>
+        <input name="county" value="{{ hospital.county if hospital else '' }}"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Phone</label>
+        <input name="phone" value="{{ hospital.phone if hospital else '' }}"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Address</label>
+      <input name="address" value="{{ hospital.address if hospital else '' }}"
+             class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Email</label>
+      <input name="email" value="{{ hospital.email if hospital else '' }}"
+             class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Receipt Footer</label>
+      <input name="receipt_footer" value="{{ hospital.get_setting('receipt_footer', '') if hospital else '' }}"
+             class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+    </div>
+    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+      Save Changes
+    </button>
+  </form>
+</div>
+
+{% if current_user.has_permission('pricing.manage') %}
+<p class="max-w-2xl mt-4 text-xs text-slate-500">
+  Consultation fee, currency, and other pricing settings moved to
+  <a href="{{ url_for('admin.system_settings') }}" class="text-emerald-700 hover:underline font-medium">Pricing & System Settings</a>.
+</p>
+{% endif %}
+
+<script>
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  const data = await postJSON("{{ url_for('admin.settings_update') }}", payload);
+  if (data.success) {
+    showToast('Settings saved.');
+  } else {
+    showToast(data.error || 'Could not save settings.', true);
+  }
+});
+</script>
+{% endblock %}

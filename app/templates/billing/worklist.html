@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Billing{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Billing</h1>
+<p class="text-sm text-slate-500 mb-6">Bills awaiting full payment across your hospital.</p>
+
+{% if unbilled_visits %}
+<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+  <h2 class="font-semibold text-sm text-amber-800 mb-2">Awaiting Billing — {{ unbilled_visits|length }} visit(s) finished with no bill generated yet</h2>
+  <div class="divide-y divide-amber-100 text-sm">
+    {% for v in unbilled_visits %}
+    <div class="py-2 flex items-center justify-between">
+      <div>
+        <a href="{{ url_for('patients.patient_detail', patient_id=v.patient_id) }}" class="font-medium text-emerald-700 hover:underline">{{ v.patient.full_name }}</a>
+        <span class="text-xs text-slate-500 ml-2">{{ v.visit_type }} · {{ v.status }} · {{ v.created_at.strftime('%d %b %Y') }}</span>
+      </div>
+      <button onclick="generateAndOpen({{ v.id }})" class="text-xs px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+        Generate Bill
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">Patient</th>
+        <th class="px-4 py-3">Scheme</th>
+        <th class="px-4 py-3">Total</th>
+        <th class="px-4 py-3">Paid</th>
+        <th class="px-4 py-3">Balance</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for bill in bills %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50">
+        <td class="px-4 py-3 font-medium">{{ bill.patient.full_name }}</td>
+        <td class="px-4 py-3">{{ bill.insurance_scheme.name if bill.insurance_scheme else 'Cash / Self-pay' }}</td>
+        <td class="px-4 py-3">KES {{ '%.2f' | format(bill.total_amount) }}</td>
+        <td class="px-4 py-3">KES {{ '%.2f' | format(bill.amount_paid) }}</td>
+        <td class="px-4 py-3 font-semibold">KES {{ '%.2f' | format(bill.balance_due) }}</td>
+        <td class="px-4 py-3">
+          <span class="text-xs px-2 py-1 rounded {{ 'bg-amber-100 text-amber-700' if bill.status == 'Pending' else 'bg-blue-100 text-blue-700' }}">
+            {{ bill.status }}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <a href="{{ url_for('billing.bill_detail', bill_id=bill.id) }}" class="text-xs text-emerald-700 hover:underline font-semibold">Open &rarr;</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No outstanding bills.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+async function generateAndOpen(visitId) {
+  const data = await postJSON(`/visits/${visitId}/generate-bill`, {});
+  if (data.success) {
+    window.location.href = `/bills/${data.id}`;
+  } else {
+    showToast(data.error || 'Could not generate bill.', true);
+  }
+}
+</script>
+{% endblock %}

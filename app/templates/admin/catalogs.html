@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Master Catalogs{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Diagnosis / Drug / Radiology / Insurance Catalogs</h1>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- Diagnosis -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-1">Diagnosis Codes (ICD)</h2>
+    <p class="text-xs text-slate-400 mb-3">Shared ICD-10 reference data across the whole system — not specific to your organization.</p>
+    <form id="diagnosis-form" class="flex gap-2 mb-3">
+      <input name="code" placeholder="Code" required class="w-24 border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="description" placeholder="Description" required class="flex-1 border border-slate-300 rounded px-2 py-1 text-sm">
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 rounded">Add</button>
+    </form>
+    <div class="max-h-64 overflow-y-auto text-sm divide-y divide-slate-100" id="diagnosis-list">
+      {% for d in diagnoses %}
+      <div class="py-1.5 flex justify-between"><span class="font-mono text-xs text-slate-500">{{ d.code }}</span><span>{{ d.description }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Drugs -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Drug Formulary</h2>
+    <form id="drug-form" class="grid grid-cols-2 gap-2 mb-3">
+      <input name="name" placeholder="Drug name" required class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="generic_name" placeholder="Generic name" class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="form" placeholder="Form (tablet, syrup...)" class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="strength" placeholder="Strength (500mg)" class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <label class="col-span-2 flex items-center gap-2 text-xs text-slate-600">
+        <input type="checkbox" name="is_triage_relief" value="true">
+        Nurses can give this for relief at triage, before the doctor sees the patient
+      </label>
+      <button class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm py-1 rounded">Add Drug</button>
+    </form>
+    <div class="max-h-64 overflow-y-auto text-sm divide-y divide-slate-100" id="drug-list">
+      {% for d in drugs %}
+      <div class="py-1.5 flex justify-between items-center">
+        <span>{{ d.name }} <span class="text-xs text-slate-500">{{ d.strength or '' }}</span></span>
+        <label class="flex items-center gap-1 text-xs text-slate-500">
+          <input type="checkbox" onchange="toggleTriageRelief({{ d.id }}, this.checked)" {{ 'checked' if d.is_triage_relief }}>
+          Triage relief
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Radiology -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Radiology Tests</h2>
+    <form id="radiology-form" class="flex gap-2 mb-3">
+      <input name="code" placeholder="Code" required class="w-24 border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="name" placeholder="Test name" required class="flex-1 border border-slate-300 rounded px-2 py-1 text-sm">
+      <select name="modality" class="border border-slate-300 rounded px-2 py-1 text-sm">
+        <option>X-Ray</option><option>Ultrasound</option><option>CT</option><option>MRI</option>
+      </select>
+      <input name="price" type="number" step="0.01" placeholder="Price" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm">
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 rounded">Add</button>
+    </form>
+    <div class="max-h-64 overflow-y-auto text-sm divide-y divide-slate-100" id="radiology-list">
+      {% for r in radiology %}
+      <div class="py-1.5 flex justify-between"><span>{{ r.name }}</span><span class="text-xs text-slate-500">{{ r.modality }} · KES {{ '%.0f' | format(r.price or 0) }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Lab Tests -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Lab Tests</h2>
+    <form id="lab-test-form" class="flex gap-2 mb-3">
+      <input name="code" placeholder="Code" required class="w-24 border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="name" placeholder="Test name" required class="flex-1 border border-slate-300 rounded px-2 py-1 text-sm">
+      <select name="category" class="border border-slate-300 rounded px-2 py-1 text-sm">
+        <option>Hematology</option><option>Chemistry</option><option>Microbiology</option>
+        <option>Parasitology</option><option>Serology</option>
+      </select>
+      <input name="price" type="number" step="0.01" placeholder="Price" class="w-20 border border-slate-300 rounded px-2 py-1 text-sm">
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 rounded">Add</button>
+    </form>
+    <div class="max-h-64 overflow-y-auto text-sm divide-y divide-slate-100" id="lab-test-list">
+      {% for l in lab_tests %}
+      <div class="py-1.5 flex justify-between"><span>{{ l.name }}</span><span class="text-xs text-slate-500">{{ l.category }} · KES {{ '%.0f' | format(l.price or 0) }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Insurance -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Insurance Schemes</h2>
+    <form id="insurance-form" class="flex gap-2 mb-3">
+      <input name="name" placeholder="Scheme name" required class="flex-1 border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="code" placeholder="Code" required class="w-24 border border-slate-300 rounded px-2 py-1 text-sm">
+      <select name="scheme_type" class="border border-slate-300 rounded px-2 py-1 text-sm">
+        <option>NHIF/SHA</option><option>Private</option><option>Corporate</option>
+      </select>
+      <button class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 rounded">Add</button>
+    </form>
+    <div class="max-h-64 overflow-y-auto text-sm divide-y divide-slate-100" id="insurance-list">
+      {% for i in insurance %}
+      <div class="py-1.5 flex justify-between"><span>{{ i.name }}</span><span class="text-xs text-slate-500">{{ i.code }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Wards -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-semibold">Wards & Beds (Inpatient)</h2>
+      {% if allows_inpatient %}
+      <a href="{{ url_for('inpatient.ward_census') }}" class="text-sm text-emerald-700 hover:underline">View ward census →</a>
+      {% endif %}
+    </div>
+    {% if not allows_inpatient %}
+    <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+      {{ current_user.hospital.level if current_user.hospital else 'This facility level' }} doesn't offer inpatient admission, so wards aren't applicable here.
+    </p>
+    {% else %}
+    <form id="ward-form" class="grid grid-cols-2 gap-2 mb-3">
+      <input name="name" placeholder="Ward name" required class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <select name="ward_type" class="border border-slate-300 rounded px-2 py-1 text-sm">
+        <option>General</option><option>Maternity</option><option>ICU</option>
+        <option>Pediatric</option><option>Surgical</option>
+      </select>
+      <input name="total_beds" type="number" min="0" placeholder="Total beds (headline capacity)" required class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <input name="daily_rate" type="number" step="0.01" min="0" placeholder="Daily rate (KES)" class="border border-slate-300 rounded px-2 py-1 text-sm">
+      <button class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm py-1 rounded">Add Ward</button>
+    </form>
+    <div class="max-h-96 overflow-y-auto text-sm space-y-3" id="ward-list">
+      {% for w in wards %}
+      <div class="border border-slate-100 rounded p-2">
+        <div class="flex justify-between items-center mb-1">
+          <span class="font-medium">{{ w.name }} <span class="text-xs text-slate-400 font-normal">({{ w.ward_type or '-' }})</span></span>
+          <span class="text-xs text-slate-500">{{ w.available_beds }}/{{ w.total_beds }} free · KES {{ '%.0f' | format(w.daily_rate or 0) }}/day</span>
+        </div>
+        {% if w.beds %}
+        <div class="flex flex-wrap gap-1 mb-2">
+          {% for b in w.beds %}
+          <span class="text-xs px-2 py-0.5 rounded {{ 'bg-emerald-100 text-emerald-700' if b.status == 'Available' else 'bg-red-100 text-red-700' if b.status == 'Occupied' else 'bg-slate-100 text-slate-500' }}">
+            {{ b.label }} · {{ b.status }}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <form class="flex gap-1" onsubmit="addBed(event, {{ w.id }})">
+          <input placeholder="Bed label (e.g. Bed 3)" class="flex-1 border border-slate-300 rounded px-2 py-1 text-xs">
+          <button class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50">+ Bed</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="text-slate-400 text-xs py-2">No wards set up yet.</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function wireForm(formId, url, renderRow) {
+  document.getElementById(formId).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const payload = Object.fromEntries(form.entries());
+    const data = await postJSON(url, payload);
+    if (data.success) {
+      showToast('Added.');
+      e.target.reset();
+      window.location.reload();
+    } else {
+      showToast(data.error || 'Could not add item.', true);
+    }
+  });
+}
+wireForm('diagnosis-form', "{{ url_for('admin.catalogs_add_diagnosis') }}");
+wireForm('drug-form', "{{ url_for('admin.catalogs_add_drug') }}");
+wireForm('radiology-form', "{{ url_for('admin.catalogs_add_radiology') }}");
+wireForm('lab-test-form', "{{ url_for('admin.catalogs_add_lab_test') }}");
+
+async function toggleTriageRelief(drugId, checked) {
+  const data = await postJSON(`/catalogs/drug/${drugId}/triage-relief`, { is_triage_relief: checked });
+  if (!data.success) showToast(data.error || 'Could not update.', true);
+}
+wireForm('insurance-form', "{{ url_for('admin.catalogs_add_insurance') }}");
+wireForm('ward-form', "{{ url_for('admin.catalogs_add_ward') }}");
+
+async function addBed(e, wardId) {
+  e.preventDefault();
+  const input = e.target.querySelector('input');
+  const label = input.value.trim();
+  if (!label) return;
+  const data = await postJSON(`/admin/wards/${wardId}/beds`, { label });
+  if (data.success) {
+    showToast('Bed added.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not add bed.', true);
+  }
+}
+</script>
+{% endblock %}

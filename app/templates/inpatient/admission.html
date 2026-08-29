@@ -1,0 +1,586 @@
+{% extends "base.html" %}
+{% block title %}{{ admission.patient.full_name }} — Inpatient{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto py-6 space-y-6">
+
+  <div class="bg-white rounded-lg shadow p-5">
+    <div class="flex flex-wrap justify-between items-start gap-3">
+      <div>
+        <h1 class="text-xl font-bold">{{ admission.patient.full_name }}</h1>
+        <p class="text-sm text-slate-500">
+          {{ admission.patient.gender or '—' }} · {{ admission.patient.age if admission.patient.age is not none else '—' }} yrs ·
+          {{ admission.ward.name }} · Bed {{ admission.bed_label }} ·
+          Admitted {{ admission.admission_date.strftime('%d %b %Y %H:%M') }}
+        </p>
+        {% if admission.admitting_consultation and admission.admitting_consultation.all_diagnoses %}
+        <p class="text-sm mt-1"><span class="font-semibold">Admitting diagnosis:</span>
+          {{ admission.admitting_consultation.all_diagnoses|map(attribute='description')|join(', ') }}</p>
+        {% endif %}
+      </div>
+      <div class="text-right space-y-1">
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold
+          {{ 'bg-emerald-100 text-emerald-800' if admission.status == 'Active' else 'bg-slate-200 text-slate-600' }}">
+          {{ admission.status }}
+        </span>
+        <p class="text-xs text-slate-500">Day {{ admission.length_of_stay_days }} of stay</p>
+      </div>
+    </div>
+
+    {% if admission.patient.insurance_scheme %}
+    <div id="insurance-banner" class="mt-4 rounded px-4 py-2 text-sm {{ 'bg-red-50 text-red-700 border border-red-200' if admission.insurance_limit_reached else 'bg-slate-50 text-slate-600 border border-slate-200' }}">
+      <span class="font-semibold">{{ admission.patient.insurance_scheme.name }}</span> ·
+      Authorized: KES <span id="auth-amount">{{ '%.2f'|format(admission.insurance_authorized_amount) if admission.insurance_authorized_amount else '—' }}</span> ·
+      Running total: KES <span id="running-total">{{ '%.2f'|format(admission.running_bill_total()) }}</span>
+      {% if admission.insurance_limit_reached %}
+      <span class="font-bold"> — Authorization limit reached. Get a top-up from the insurer, or switch further charges to cash.</span>
+      {% endif %}
+      {% if current_user.has_permission('billing.manage') %}
+      <form onsubmit="setAuthAmount(event)" class="mt-2 flex gap-2">
+        <input name="amount" type="number" step="0.01" placeholder="Set/update authorized amount"
+               class="border border-slate-300 rounded px-2 py-1 text-sm flex-1">
+        <button class="px-3 py-1 text-sm rounded bg-slate-700 text-white">Save</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="mt-4 flex flex-wrap gap-2">
+      {% if current_user.has_permission('consultation.create') %}
+      <button onclick="toggle('review-form')" class="px-3 py-1.5 text-sm rounded border border-emerald-600 text-emerald-700 font-semibold">+ Doctor review</button>
+      {% endif %}
+      {% if current_user.has_permission('prescription.create') %}
+      <button onclick="toggle('rx-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Medication</button>
+      {% endif %}
+      {% if current_user.has_permission('lab.order') %}
+      <button onclick="toggle('lab-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Lab</button>
+      {% endif %}
+      {% if current_user.has_permission('radiology.order') %}
+      <button onclick="toggle('rad-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Radiology</button>
+      {% endif %}
+      <button onclick="toggle('procedure-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Procedure/Service</button>
+      {% if current_user.has_permission('triage.create') %}
+      <button onclick="toggle('careplan-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Care plan item</button>
+      <button onclick="toggle('vitals-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Vitals</button>
+      <button onclick="toggle('monitoring-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ I/O · Sugar reading</button>
+      <button onclick="toggle('note-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">+ Nursing note</button>
+      {% endif %}
+      {% if current_user.has_permission('consultation.create') %}
+      <button onclick="toggle('transfer-form')" class="px-3 py-1.5 text-sm rounded border border-slate-300">Transfer ward</button>
+      {% if admission.status == 'Active' %}
+      <button onclick="dischargePatient()" class="px-3 py-1.5 text-sm rounded bg-red-600 text-white font-semibold">Discharge</button>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Medication -->
+  {% if current_user.has_permission('prescription.create') %}
+  <div id="rx-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Order medication</h2>
+    <form onsubmit="submitRx(event)" class="space-y-2">
+      <div class="relative">
+        <input type="text" id="rx-drug-input" placeholder="Search drug by name..." autocomplete="off"
+               oninput="searchDrug()" onblur="setTimeout(() => document.getElementById('rx-drug-results').classList.add('hidden'), 200)"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <input type="hidden" id="rx-drug-id">
+        <div id="rx-drug-results" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <input name="dosage" placeholder="Dosage (500mg)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <select name="frequency" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+          <option value="">Frequency...</option>
+          <option>OD</option><option>BD</option><option>TDS</option><option>QDS</option><option>STAT</option><option>PRN</option>
+        </select>
+        <input name="duration" placeholder="Duration (5 days)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <input name="quantity" type="number" min="1" placeholder="Quantity" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <input name="instructions" placeholder="Instructions (after meals)" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+      </div>
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Order medication</button>
+    </form>
+    {% if admission.visit.prescriptions %}
+    <div class="mt-3 text-xs text-slate-500 space-y-1">
+      {% for p in admission.visit.prescriptions %}{% for item in p.items %}
+      <div>{{ item.drug.name }} — {{ item.dosage or '' }} {{ item.frequency or '' }} —
+        <span class="{{ 'text-emerald-700' if item.status == 'Dispensed' else 'text-amber-700' }}">{{ item.status }}</span></div>
+      {% endfor %}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Lab -->
+  {% if current_user.has_permission('lab.order') %}
+  <div id="lab-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Order lab test</h2>
+    <form onsubmit="submitLab(event)" class="flex gap-2 items-start relative">
+      <div class="relative flex-1">
+        <input type="text" id="lab-input" placeholder="Search lab test..." autocomplete="off"
+               oninput="searchLabTest()" onfocus="searchLabTest()" onblur="setTimeout(() => document.getElementById('lab-results').classList.add('hidden'), 200)"
+               class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <input type="hidden" id="lab-select">
+        <div id="lab-results" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+      </div>
+      <input name="clinical_notes" placeholder="Note (optional)" class="flex-1 border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <button class="px-4 py-1.5 text-sm rounded bg-emerald-600 text-white font-semibold">Order</button>
+    </form>
+    {% if admission.visit.lab_orders %}
+    <div class="mt-3 text-xs text-slate-500 space-y-1">
+      {% for o in admission.visit.lab_orders %}
+      <div>{{ o.lab_test.name }} — <span class="{{ 'text-emerald-700' if o.status == 'Result Ready' else 'text-amber-700' }}">{{ o.status }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Radiology -->
+  {% if current_user.has_permission('radiology.order') %}
+  <div id="rad-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Order radiology</h2>
+    <form onsubmit="submitRad(event)" class="flex gap-2 items-start relative">
+      <div class="relative flex-1">
+        <input type="text" id="rad-input" placeholder="Search radiology test..." autocomplete="off"
+               oninput="searchRadTest()" onfocus="searchRadTest()" onblur="setTimeout(() => document.getElementById('rad-results').classList.add('hidden'), 200)"
+               class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <input type="hidden" id="rad-select">
+        <div id="rad-results" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-40 overflow-y-auto"></div>
+      </div>
+      <input name="clinical_notes" placeholder="Note (optional)" class="flex-1 border border-slate-300 rounded px-2 py-1.5 text-sm">
+      <button class="px-4 py-1.5 text-sm rounded bg-emerald-600 text-white font-semibold">Order</button>
+    </form>
+    {% if admission.visit.radiology_orders %}
+    <div class="mt-3 text-xs text-slate-500 space-y-1">
+      {% for o in admission.visit.radiology_orders %}
+      <div>{{ o.radiology_test.name }} — <span class="{{ 'text-emerald-700' if o.status == 'Report Ready' else 'text-amber-700' }}">{{ o.status }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Procedures / services -->
+  <div id="procedure-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Procedure / service</h2>
+    <p class="text-xs text-slate-500 mb-2">For anything billable that isn't a drug, lab test, or radiology exam — dressing, catheter insertion, oxygen therapy, minor procedure fee, etc.</p>
+    <form onsubmit="submitProcedure(event)" class="space-y-2">
+      <input name="name" placeholder="Procedure/service name" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <div class="grid grid-cols-2 gap-2">
+        <input name="quantity" type="number" step="1" min="1" value="1" placeholder="Quantity" class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+        <input name="unit_price" type="number" step="0.01" min="0" placeholder="Price (KES)" required class="border border-slate-300 rounded px-2 py-1.5 text-sm">
+      </div>
+      <input name="notes" placeholder="Notes (optional)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="mark_done" value="true" checked>
+        Already performed — bill immediately
+      </label>
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Procedures & services</h2>
+    {% if admission.procedure_orders %}
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-500"><th>Name</th><th>Qty</th><th>Price</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for p in admission.procedure_orders %}
+        <tr class="border-t">
+          <td class="py-1">{{ p.name }}{% if p.notes %}<span class="text-slate-400"> — {{ p.notes }}</span>{% endif %}</td>
+          <td>{{ p.quantity|int }}</td>
+          <td>KES {{ '%.2f'|format(p.amount) }}</td>
+          <td>
+            <span class="{{ 'text-emerald-700' if p.status == 'Done' else ('text-slate-400' if p.status == 'Cancelled' else 'text-amber-700') }}">{{ p.status }}</span>
+          </td>
+          <td class="text-right">
+            {% if p.status == 'Ordered' %}
+            <button onclick="completeProcedure({{ p.id }})" class="text-emerald-700 hover:underline text-xs mr-2">Mark done</button>
+            {% if current_user.has_permission('consultation.create') %}
+            <button onclick="cancelProcedure({{ p.id }})" class="text-red-600 hover:underline text-xs">Cancel</button>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-xs text-slate-400 mt-2">Only items marked "Done" are billed on discharge.</p>
+    {% else %}<p class="text-slate-400 text-sm">No procedures/services recorded yet.</p>{% endif %}
+  </div>
+
+  <!-- Doctor review -->
+  <div id="review-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Doctor review</h2>
+    <form onsubmit="submitReview(event)" class="space-y-2">
+      <textarea name="findings" placeholder="Findings" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <textarea name="assessment" placeholder="Assessment / progress" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <textarea name="plan" placeholder="Plan (meds, investigations, procedures)" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <input name="procedure_done" placeholder="Procedure done today (optional)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save review</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Ward round history</h2>
+    {% if admission.doctor_reviews %}
+    <div class="space-y-3">
+      {% for r in admission.doctor_reviews %}
+      <div class="border-l-2 border-emerald-500 pl-3 text-sm">
+        <p class="text-xs text-slate-500">{{ r.created_at.strftime('%d %b %Y %H:%M') }} · Dr. {{ r.doctor.full_name }}</p>
+        {% if r.findings %}<p><span class="font-medium">Findings:</span> {{ r.findings }}</p>{% endif %}
+        {% if r.assessment %}<p><span class="font-medium">Assessment:</span> {{ r.assessment }}</p>{% endif %}
+        {% if r.plan %}<p><span class="font-medium">Plan:</span> {{ r.plan }}</p>{% endif %}
+        {% if r.procedure_done %}<p><span class="font-medium">Procedure:</span> {{ r.procedure_done }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-slate-400 text-sm">No reviews recorded yet.</p>{% endif %}
+  </div>
+
+  <!-- Care plan / cardex -->
+  <div id="careplan-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">New care plan item</h2>
+    <form onsubmit="submitCarePlan(event)" class="space-y-2">
+      <input name="problem" placeholder="Problem / nursing diagnosis" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <textarea name="goal" placeholder="Goal" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <textarea name="interventions" placeholder="Interventions — what nurses should do each shift" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Nursing care plan / cardex</h2>
+    {% if admission.care_plans %}
+    <div class="space-y-2">
+      {% for cp in admission.care_plans %}
+      <div class="border border-slate-200 rounded p-3 text-sm">
+        <div class="flex justify-between items-start">
+          <p class="font-medium">{{ cp.problem }}</p>
+          <select onchange="updateCarePlanStatus({{ cp.id }}, this.value)" class="text-xs border border-slate-300 rounded px-1 py-0.5">
+            {% for s in care_plan_statuses %}
+            <option value="{{ s }}" {{ 'selected' if cp.status == s }}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if cp.goal %}<p class="text-slate-600">Goal: {{ cp.goal }}</p>{% endif %}
+        {% if cp.interventions %}<p class="text-slate-600">Interventions: {{ cp.interventions }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-slate-400 text-sm">No care plan items yet.</p>{% endif %}
+  </div>
+
+  <!-- Vitals -->
+  <div id="vitals-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Record vitals</h2>
+    <form onsubmit="submitVitals(event)" class="grid grid-cols-2 gap-2">
+      <input name="temperature_c" type="number" step="0.1" placeholder="Temp °C" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="pulse_bpm" type="number" placeholder="Pulse bpm" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="bp_systolic" type="number" placeholder="BP systolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="bp_diastolic" type="number" placeholder="BP diastolic" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="respiratory_rate" type="number" placeholder="Resp. rate" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="spo2_percent" type="number" placeholder="SpO2 %" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="notes" placeholder="Notes" class="col-span-2 border border-slate-300 rounded px-3 py-2 text-sm">
+      <button class="col-span-2 px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save vitals</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Vitals log</h2>
+    {% if admission.vitals %}
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-500"><th>Time</th><th>Temp</th><th>Pulse</th><th>BP</th><th>RR</th><th>SpO2</th></tr></thead>
+      <tbody>
+        {% for v in admission.vitals[:10] %}
+        <tr class="border-t"><td>{{ v.recorded_at.strftime('%d %b %H:%M') }}</td><td>{{ v.temperature_c or '—' }}</td>
+        <td>{{ v.pulse_bpm or '—' }}</td><td>{{ v.bp_systolic or '—' }}/{{ v.bp_diastolic or '—' }}</td>
+        <td>{{ v.respiratory_rate or '—' }}</td><td>{{ v.spo2_percent or '—' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-slate-400 text-sm">No vitals recorded yet.</p>{% endif %}
+  </div>
+
+  <!-- Monitoring: I/O, blood sugar, etc. -->
+  <div id="monitoring-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Record a monitoring reading</h2>
+    <form onsubmit="submitMonitoring(event)" class="grid grid-cols-2 gap-2">
+      <select name="chart_type" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        {% for t in monitoring_chart_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+      <input name="value" type="number" step="0.1" placeholder="Value" required class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="route_or_context" placeholder="Route/context (e.g. Oral, IV, Urine)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="notes" placeholder="Notes" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      <button class="col-span-2 px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save reading</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Monitoring charts</h2>
+    <div class="grid md:grid-cols-3 gap-4 mb-4">
+      {% for chart_type in ['Intake', 'Output', 'Blood Sugar'] %}
+      {% set series = chart_series.get(chart_type) %}
+      <div class="border border-slate-200 rounded p-3">
+        <p class="text-xs font-semibold text-slate-500 mb-1">{{ chart_type }}</p>
+        {% if series and series.points %}
+        <svg width="{{ series.width }}" height="{{ series.height }}" viewBox="0 0 {{ series.width }} {{ series.height }}" class="w-full h-auto">
+          <polyline points="{{ series.points }}" fill="none" stroke="#059669" stroke-width="2"/>
+        </svg>
+        <p class="text-xs text-slate-400 mt-1">{{ series.lo }} – {{ series.hi }} {{ series.entries[0].unit }} (last {{ series.entries|length }} readings)</p>
+        {% elif series and series.entries %}
+        <p class="text-xs text-slate-400">Only one reading so far — {{ series.entries[0].value }} {{ series.entries[0].unit }}</p>
+        {% else %}
+        <p class="text-xs text-slate-400">No readings yet.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if admission.monitoring_entries %}
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-500"><th>Time</th><th>Chart</th><th>Value</th><th>Context</th></tr></thead>
+      <tbody>
+        {% for m in admission.monitoring_entries[:15] %}
+        <tr class="border-t"><td>{{ m.recorded_at.strftime('%d %b %H:%M') }}</td><td>{{ m.chart_type }}</td>
+        <td>{{ m.value }} {{ m.unit }}</td><td>{{ m.route_or_context or '—' }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="text-slate-400 text-sm">No monitoring readings yet.</p>{% endif %}
+  </div>
+
+  <!-- Nursing notes -->
+  <div id="note-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Nursing note</h2>
+    <form onsubmit="submitNote(event)" class="space-y-2">
+      <textarea name="note" placeholder="Note" rows="2" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Save note</button>
+    </form>
+  </div>
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Nursing notes</h2>
+    {% if admission.nursing_notes %}
+    <div class="space-y-2 text-sm">
+      {% for n in admission.nursing_notes[:10] %}
+      <p><span class="text-slate-500">{{ n.created_at.strftime('%d %b %H:%M') }}:</span> {{ n.note }}</p>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-slate-400 text-sm">No nursing notes yet.</p>{% endif %}
+  </div>
+
+  <!-- Transfer -->
+  <div id="transfer-form" class="hidden bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Transfer ward</h2>
+    <form onsubmit="submitTransfer(event)" class="space-y-2">
+      <select name="to_ward_id" onchange="loadBeds(this.value)" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <option value="">Select ward...</option>
+        {% for w in wards %}{% if w.id != admission.ward_id %}<option value="{{ w.id }}">{{ w.name }} ({{ w.available_beds }}/{{ w.total_beds }} free)</option>{% endif %}{% endfor %}
+      </select>
+      <select name="to_bed_id" id="transfer-bed-select" class="hidden w-full border border-slate-300 rounded px-3 py-2 text-sm"><option value="">Select bed...</option></select>
+      <input name="reason" placeholder="Reason" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <button class="px-4 py-2 text-sm rounded bg-emerald-600 text-white font-semibold">Transfer</button>
+    </form>
+  </div>
+
+  <!-- Discharge summary -->
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-2">Discharge summary</h2>
+    <p class="text-xs text-slate-500 mb-3">Auto-generated from the admission record, diagnoses, ward reviews, and results already in the system. Only discharge medications and advice need typing.</p>
+    <form onsubmit="submitDischargeSummary(event)" class="space-y-2">
+      <textarea name="discharge_medications" placeholder="Discharge medications" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <textarea name="discharge_advice" placeholder="Discharge advice" rows="2" class="w-full border border-slate-300 rounded px-3 py-2 text-sm"></textarea>
+      <div class="flex gap-2">
+        <button class="px-4 py-2 text-sm rounded bg-slate-700 text-white font-semibold">Generate / update summary</button>
+        {% if admission.discharge_summary_document_id %}
+        <a href="{{ url_for('documents.print_document', doc_id=admission.discharge_summary_document_id) }}" target="_blank"
+           class="px-4 py-2 text-sm rounded border border-slate-300">View / print</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const admissionId = {{ admission.id }};
+function toggle(id) { document.getElementById(id).classList.toggle('hidden'); }
+
+async function handle(promise, reloadOnSuccess = true) {
+  const data = await promise;
+  if (data.success) {
+    showToast('Saved');
+    if (data.insurance_limit_reached) showToast('Insurance authorization limit reached for this stay', true);
+    if (reloadOnSuccess) setTimeout(() => location.reload(), 400);
+  } else {
+    showToast(data.error || 'Something went wrong', true);
+  }
+  return data;
+}
+
+function submitReview(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/doctor-reviews`, Object.fromEntries(new FormData(e.target).entries())));
+}function submitCarePlan(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/care-plans`, Object.fromEntries(new FormData(e.target).entries())));
+}
+function updateCarePlanStatus(id, status) {
+  handle(postJSON(`/care-plans/${id}/status`, {status}));
+}
+function submitVitals(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/vitals`, Object.fromEntries(new FormData(e.target).entries())));
+}
+function submitMonitoring(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/monitoring`, Object.fromEntries(new FormData(e.target).entries())));
+}
+function submitNote(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/nursing-notes`, Object.fromEntries(new FormData(e.target).entries())));
+}
+function submitTransfer(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/transfer`, Object.fromEntries(new FormData(e.target).entries())));
+}
+
+/* ---------- Medication ---------- */
+let rxSearchTimer;
+function searchDrug() {
+  clearTimeout(rxSearchTimer);
+  rxSearchTimer = setTimeout(async () => {
+    const input = document.getElementById('rx-drug-input');
+    const resultsBox = document.getElementById('rx-drug-results');
+    const hiddenId = document.getElementById('rx-drug-id');
+    const q = input.value.trim();
+    hiddenId.value = '';
+    if (q.length < 2) { resultsBox.classList.add('hidden'); return; }
+    const res = await fetch(`/api/drug-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    (data.results || []).forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+      row.textContent = `${r.name} ${r.strength || ''} (${r.form || ''})`;
+      row.addEventListener('mousedown', () => {
+        input.value = `${r.name} ${r.strength || ''}`.trim();
+        hiddenId.value = r.id;
+        resultsBox.classList.add('hidden');
+      });
+      resultsBox.appendChild(row);
+    });
+    resultsBox.classList.remove('hidden');
+  }, 250);
+}
+function submitRx(e) {
+  e.preventDefault();
+  const drugId = document.getElementById('rx-drug-id').value;
+  if (!drugId) { showToast('Search and select a drug first', true); return; }
+  const form = Object.fromEntries(new FormData(e.target).entries());
+  handle(postJSON(`/visits/{{ admission.visit_id }}/prescriptions`, { items: [{ drug_id: drugId, ...form }] }));
+}
+
+/* ---------- Lab ---------- */
+let labSearchTimer;
+function searchLabTest() {
+  clearTimeout(labSearchTimer);
+  labSearchTimer = setTimeout(async () => {
+    const input = document.getElementById('lab-input');
+    const resultsBox = document.getElementById('lab-results');
+    const hiddenId = document.getElementById('lab-select');
+    const q = input.value.trim();
+    hiddenId.value = '';
+    const res = await fetch(`/api/lab-test-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    (data.results || []).forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+      row.textContent = `${r.name} (${r.category || ''})`;
+      row.addEventListener('mousedown', () => { input.value = r.name; hiddenId.value = r.id; resultsBox.classList.add('hidden'); });
+      resultsBox.appendChild(row);
+    });
+    resultsBox.classList.remove('hidden');
+  }, 200);
+}
+function submitLab(e) {
+  e.preventDefault();
+  const testId = document.getElementById('lab-select').value;
+  if (!testId) { showToast('Search and select a lab test first', true); return; }
+  const form = Object.fromEntries(new FormData(e.target).entries());
+  handle(postJSON(`/visits/{{ admission.visit_id }}/lab-orders`, { lab_test_id: testId, ...form }));
+}
+
+/* ---------- Radiology ---------- */
+let radSearchTimer;
+function searchRadTest() {
+  clearTimeout(radSearchTimer);
+  radSearchTimer = setTimeout(async () => {
+    const input = document.getElementById('rad-input');
+    const resultsBox = document.getElementById('rad-results');
+    const hiddenId = document.getElementById('rad-select');
+    const q = input.value.trim();
+    hiddenId.value = '';
+    const res = await fetch(`/api/radiology-test-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    (data.results || []).forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+      row.textContent = `${r.name} (${r.modality || ''})`;
+      row.addEventListener('mousedown', () => { input.value = r.name; hiddenId.value = r.id; resultsBox.classList.add('hidden'); });
+      resultsBox.appendChild(row);
+    });
+    resultsBox.classList.remove('hidden');
+  }, 200);
+}
+function submitRad(e) {
+  e.preventDefault();
+  const testId = document.getElementById('rad-select').value;
+  if (!testId) { showToast('Search and select a radiology test first', true); return; }
+  const form = Object.fromEntries(new FormData(e.target).entries());
+  handle(postJSON(`/visits/{{ admission.visit_id }}/radiology-orders`, { radiology_test_id: testId, ...form }));
+}
+
+/* ---------- Procedures / services ---------- */
+function submitProcedure(e) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = Object.fromEntries(form.entries());
+  data.mark_done = form.get('mark_done') ? 'true' : 'false';
+  handle(postJSON(`/admissions/${admissionId}/procedures`, data));
+}
+function completeProcedure(id) {
+  handle(postJSON(`/procedures/${id}/complete`, {}));
+}
+function cancelProcedure(id) {
+  if (!confirm('Cancel this procedure/service?')) return;
+  handle(postJSON(`/procedures/${id}/cancel`, {}));
+}
+function setAuthAmount(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/insurance-authorization`, Object.fromEntries(new FormData(e.target).entries())));
+}
+function submitDischargeSummary(e) {
+  e.preventDefault();
+  handle(postJSON(`/admissions/${admissionId}/discharge-summary`, Object.fromEntries(new FormData(e.target).entries())));
+}
+async function dischargePatient() {
+  if (!confirm('Discharge this patient from the ward?')) return;
+  handle(postJSON(`/visits/{{ admission.visit_id }}/discharge`, {}));
+}
+const WARD_BEDS = {
+  {% for w in wards %}
+  {{ w.id }}: [{% for b in w.beds if b.status == 'Available' %}{ id: {{ b.id }}, label: {{ b.label | tojson }} },{% endfor %}],
+  {% endfor %}
+};
+function loadBeds(wardId) {
+  const select = document.getElementById('transfer-bed-select');
+  select.innerHTML = '<option value="">No specific bed</option>';
+  const beds = WARD_BEDS[wardId] || [];
+  select.classList.toggle('hidden', beds.length === 0);
+  beds.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id; opt.textContent = b.label;
+    select.appendChild(opt);
+  });
+}
+</script>
+{% endblock %}

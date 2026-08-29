@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Bill — {{ bill.patient.full_name }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('patients.patient_detail', patient_id=bill.patient_id) }}" class="text-sm text-emerald-700 hover:underline">&larr; Back to {{ bill.patient.full_name }}</a>
+
+<div class="flex items-start justify-between mt-3 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Bill #{{ bill.id }}</h1>
+    <p class="text-sm text-slate-500">{{ bill.patient.full_name }} · {{ bill.created_at.strftime('%d %b %Y') }}</p>
+  </div>
+  <span class="text-xs px-3 py-1.5 rounded {{ 'bg-emerald-100 text-emerald-700' if bill.status == 'Paid' else 'bg-slate-100 text-slate-600' if bill.status == 'Waived' else 'bg-amber-100 text-amber-700' }}">
+    {{ bill.status }}
+  </span>
+</div>
+
+<div class="mb-4">
+  <a href="{{ url_for('billing.bill_receipt', bill_id=bill.id) }}" target="_blank"
+     class="text-xs px-3 py-1.5 rounded border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium">
+    Print Receipt &rarr;
+  </a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="bg-white rounded-lg shadow p-5 lg:col-span-2">
+    <h2 class="font-semibold mb-3">Charges</h2>
+    <table class="w-full text-sm">
+      <thead class="text-left text-slate-400 text-xs">
+        <tr><th class="pb-2">Item</th><th class="pb-2">Category</th><th class="pb-2 text-right">Qty</th><th class="pb-2 text-right">Unit</th><th class="pb-2 text-right">Amount</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for li in bill.line_items %}
+        <tr>
+          <td class="py-2">{{ li.description }}</td>
+          <td class="py-2 text-xs text-slate-500">{{ li.category }}</td>
+          <td class="py-2 text-right">{{ li.quantity | int }}</td>
+          <td class="py-2 text-right">{{ '%.2f' | format(li.unit_price) }}</td>
+          <td class="py-2 text-right font-medium">{{ '%.2f' | format(li.amount) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-4 text-center text-slate-400">No charges recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="border-t border-slate-200 font-semibold">
+          <td colspan="4" class="py-2 text-right">Total</td>
+          <td class="py-2 text-right">KES {{ '%.2f' | format(bill.total_amount) }}</td>
+        </tr>
+        <tr class="text-emerald-700">
+          <td colspan="4" class="py-1 text-right">Paid</td>
+          <td class="py-1 text-right">KES {{ '%.2f' | format(bill.amount_paid) }}</td>
+        </tr>
+        <tr class="font-semibold {{ 'text-red-600' if bill.balance_due > 0 else 'text-emerald-700' }}">
+          <td colspan="4" class="py-1 text-right">Balance Due</td>
+          <td class="py-1 text-right">KES {{ '%.2f' | format(bill.balance_due) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <h2 class="font-semibold mt-6 mb-3">Payment History</h2>
+    <div class="divide-y divide-slate-100 text-sm">
+      {% for p in bill.payments %}
+      <div class="py-2 flex justify-between">
+        <span>{{ p.method }} {% if p.reference %}· {{ p.reference }}{% endif %} · {{ p.received_by.full_name if p.received_by else '-' }}</span>
+        <span class="font-medium">KES {{ '%.2f' | format(p.amount) }}</span>
+      </div>
+      {% else %}
+      <p class="text-slate-400 py-2">No payments recorded yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">Insurance</h2>
+      <p class="text-sm">{{ bill.insurance_scheme.name if bill.insurance_scheme else 'Cash / Self-pay' }}</p>
+      {% if bill.insurance_scheme %}
+      <form onsubmit="saveClaimNumber(event)" class="mt-2 flex gap-2">
+        <input id="claim-number" name="insurance_claim_number" placeholder="Claim number" value="{{ bill.insurance_claim_number or '' }}"
+               class="flex-1 border border-slate-300 rounded px-2 py-1 text-sm">
+        <button type="submit" class="text-xs px-3 py-1 rounded border border-slate-300 hover:bg-slate-50">Save</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if bill.status != 'Paid' and bill.status != 'Waived' %}
+    <div class="bg-white rounded-lg shadow p-5">
+      <h2 class="font-semibold mb-3">Record Payment</h2>
+      <form id="payment-form" class="space-y-3">
+        <input name="amount" type="number" step="0.01" min="0.01" max="{{ bill.balance_due }}" placeholder="Amount (KES)" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <select name="method" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+          <option value="">Payment method...</option>
+          {% for m in payment_methods %}
+          <option value="{{ m }}">{{ m }}</option>
+          {% endfor %}
+        </select>
+        <input name="reference" placeholder="Reference (M-Pesa code, etc.)" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 rounded">
+          Record Payment
+        </button>
+      </form>
+      <button onclick="waiveBill()" class="w-full mt-2 text-xs text-red-600 hover:underline">Waive this bill</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.getElementById('payment-form') && document.getElementById('payment-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON("{{ url_for('billing.record_payment', bill_id=bill.id) }}", Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Payment recorded.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not record payment.', true);
+  }
+});
+
+async function waiveBill() {
+  if (!confirm('Waive the remaining balance on this bill?')) return;
+  const data = await postJSON("{{ url_for('billing.waive_bill', bill_id=bill.id) }}", {});
+  if (data.success) {
+    showToast('Bill waived.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not waive bill.', true);
+  }
+}
+
+async function saveClaimNumber(e) {
+  e.preventDefault();
+  const value = document.getElementById('claim-number').value;
+  const data = await postJSON("{{ url_for('billing.update_claim_number', bill_id=bill.id) }}", { insurance_claim_number: value });
+  if (data.success) {
+    showToast('Claim number saved.');
+  } else {
+    showToast('Could not save.', true);
+  }
+}
+</script>
+{% endblock %}

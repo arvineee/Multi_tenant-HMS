@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Audit Log</h1>
+  <span class="text-xs text-slate-400">{{ pagination.total }} entries</span>
+</div>
+
+<form method="get" class="bg-white rounded-lg shadow p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3">
+  <select name="action" class="border border-slate-300 rounded px-3 py-2 text-sm">
+    <option value="">All actions</option>
+    {% for a in distinct_actions %}
+    <option value="{{ a }}" {{ 'selected' if filters.action == a else '' }}>{{ a }}</option>
+    {% endfor %}
+  </select>
+  <select name="model" class="border border-slate-300 rounded px-3 py-2 text-sm">
+    <option value="">All record types</option>
+    {% for m in distinct_models %}
+    <option value="{{ m }}" {{ 'selected' if filters.model == m else '' }}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <input name="user" placeholder="Staff username or name" value="{{ filters.user }}"
+         class="border border-slate-300 rounded px-3 py-2 text-sm">
+  <input type="date" name="date_from" value="{{ filters.date_from }}"
+         class="border border-slate-300 rounded px-3 py-2 text-sm">
+  <input type="date" name="date_to" value="{{ filters.date_to }}"
+         class="border border-slate-300 rounded px-3 py-2 text-sm">
+  <div class="col-span-2 md:col-span-5 flex gap-2">
+    <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+      Filter
+    </button>
+    <a href="{{ url_for('admin.audit_logs') }}" class="px-4 py-2 text-sm rounded border border-slate-300">Clear</a>
+  </div>
+</form>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">When</th>
+        <th class="px-4 py-3">Staff</th>
+        <th class="px-4 py-3">Action</th>
+        <th class="px-4 py-3">Record</th>
+        <th class="px-4 py-3">Hospital</th>
+        <th class="px-4 py-3">Details</th>
+        <th class="px-4 py-3">IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr class="border-t border-slate-100 align-top">
+        <td class="px-4 py-3 whitespace-nowrap text-slate-500">{{ e.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="px-4 py-3">{{ e.user.full_name if e.user else '—' }}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-1 rounded text-xs bg-slate-100 text-slate-700">{{ e.action }}</span>
+        </td>
+        <td class="px-4 py-3">
+          {{ e.model_name or '—' }}{% if e.record_id %} #{{ e.record_id }}{% endif %}
+        </td>
+        <td class="px-4 py-3">{{ e.hospital.name if e.hospital else '—' }}</td>
+        <td class="px-4 py-3 text-slate-500 max-w-xs truncate" title="{{ e.details or '' }}">{{ e.details or '—' }}</td>
+        <td class="px-4 py-3 text-slate-400">{{ e.ip_address or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No audit entries match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<div class="flex items-center justify-between mt-4 text-sm">
+  <div>
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('admin.audit_logs', page=pagination.prev_num, **filters) }}" class="text-emerald-700 hover:underline">&larr; Newer</a>
+    {% endif %}
+  </div>
+  <div class="text-slate-400">Page {{ pagination.page }} of {{ pagination.pages }}</div>
+  <div>
+    {% if pagination.has_next %}
+    <a href="{{ url_for('admin.audit_logs', page=pagination.next_num, **filters) }}" class="text-emerald-700 hover:underline">Older &rarr;</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

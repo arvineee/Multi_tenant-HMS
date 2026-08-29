@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Pharmacy Stock{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Pharmacy Stock</h1>
+  <button onclick="document.getElementById('receive-modal').classList.remove('hidden')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    + Receive Stock
+  </button>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Stock on Hand</h2>
+    <div class="divide-y divide-slate-100 text-sm max-h-[28rem] overflow-y-auto">
+      {% for row in drug_levels %}
+      <div class="py-2 flex justify-between items-center">
+        <span>{{ row.drug.name }} <span class="text-xs text-slate-400">{{ row.drug.strength or '' }}</span></span>
+        <span class="text-xs px-2 py-1 rounded {{ 'bg-red-100 text-red-700' if row.on_hand < low_stock_threshold else 'bg-emerald-100 text-emerald-700' }}">
+          {{ row.on_hand }} units {{ '· LOW' if row.on_hand < low_stock_threshold else '' }}
+        </span>
+      </div>
+      {% else %}
+      <p class="text-slate-400 py-4">No drugs in the formulary yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-5">
+    <h2 class="font-semibold mb-3">Batches (by expiry)</h2>
+    <div class="divide-y divide-slate-100 text-sm max-h-[28rem] overflow-y-auto">
+      {% for b in batches %}
+      <div class="py-2">
+        <div class="flex justify-between">
+          <span class="font-medium">{{ b.drug.name }}</span>
+          <span class="text-xs {{ 'text-red-600 font-semibold' if b.expiry_date and b.expiry_date < today else 'text-slate-500' }}">
+            {{ b.expiry_date.strftime('%d %b %Y') if b.expiry_date else 'No expiry set' }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-400">
+          Batch {{ b.batch_number or '-' }} · {{ b.quantity_remaining }}/{{ b.quantity_received }} remaining
+        </p>
+      </div>
+      {% else %}
+      <p class="text-slate-400 py-4">No stock batches received yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div id="receive-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <h2 class="font-bold text-lg mb-4">Receive Stock</h2>
+    <form id="receive-form" class="space-y-3">
+      <select name="drug_id" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        <option value="">Select drug...</option>
+        {% for row in drug_levels %}
+        <option value="{{ row.drug.id }}">{{ row.drug.name }} {{ row.drug.strength or '' }}</option>
+        {% endfor %}
+      </select>
+      <input name="batch_number" placeholder="Batch number" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="quantity" type="number" min="1" placeholder="Quantity received" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <div class="grid grid-cols-2 gap-3">
+        <input name="unit_cost" type="number" step="0.01" placeholder="Unit cost (KES)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+        <input name="selling_price" type="number" step="0.01" placeholder="Selling price (KES)" class="border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Expiry date</label>
+        <input name="expiry_date" type="date" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('receive-modal').classList.add('hidden')"
+                class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save Batch</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('receive-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON("{{ url_for('pharmacy.receive_stock') }}", Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Stock received.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not save batch.', true);
+  }
+});
+</script>
+{% endblock %}

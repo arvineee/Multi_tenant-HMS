@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">{{ title }}</h1>
+<p class="text-sm text-slate-500 mb-6">
+  {% if title == 'Triage Queue' %}Patients checked in and waiting for vitals — this is your queue only.
+  {% else %}Patients triaged and ready for (or already mid-) consultation — this is your queue only.{% endif %}
+</p>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">Priority</th>
+        <th class="px-4 py-3">Patient</th>
+        <th class="px-4 py-3">Visit</th>
+        <th class="px-4 py-3">Status</th>
+        <th class="px-4 py-3">Waiting since</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in visits %}
+      <tr class="border-t border-slate-100 hover:bg-slate-50">
+        <td class="px-4 py-3">
+          {% set priority = v.triage.priority if v.triage else 'Not triaged' %}
+          <span class="px-2 py-1 rounded text-xs
+            {{ 'bg-red-100 text-red-700' if priority == 'Emergency'
+               else 'bg-amber-100 text-amber-700' if priority == 'Urgent'
+               else 'bg-slate-100 text-slate-600' }}">
+            {{ priority }}
+          </span>
+        </td>
+        <td class="px-4 py-3 font-medium">{{ v.patient.full_name }}</td>
+        <td class="px-4 py-3">{{ v.visit_type }}{% if v.reason %} — {{ v.reason }}{% endif %}</td>
+        <td class="px-4 py-3">
+          <span class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">{{ v.current_stage }}</span>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-500">{{ v.created_at.strftime('%H:%M') }}</td>
+        <td class="px-4 py-3">
+          <a href="{{ url_for('patients.patient_detail', patient_id=v.patient_id) }}"
+             class="text-xs text-emerald-700 hover:underline font-semibold">Open &rarr;</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Queue is empty. Nice.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
