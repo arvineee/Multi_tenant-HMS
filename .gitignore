@@ -10,3 +10,161 @@ instance/
 
 # Local database — back this up separately, don't rely on git for it.
 hospital.db
+
+# ================================
+# Python
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ================================
+# Environment & Secrets
+# ================================
+.env
+.env.*
+!.env.example
+
+# API keys / credentials
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# ================================
+# Flask
+# ================================
+instance/
+.webassets-cache/
+
+# ================================
+# Database
+# ================================
+*.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL dumps
+*.sql
+*.dump
+*.backup
+
+# ================================
+# Flask-Migrate / Alembic
+# ================================
+# Keep migrations in Git
+migrations/
+
+# ================================
+# Logs
+# ================================
+*.log
+logs/
+
+# ================================
+# Testing / Coverage
+# ================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.cover
+.pytest_cache/
+
+# ================================
+# Type checking / Linters
+# ================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# ================================
+# IDEs / Editors
+# ================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ================================
+# OS Files
+# ================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ================================
+# Build / Distribution
+# ================================
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ================================
+# Node / Frontend
+# ================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ================================
+# Generated / Temporary Files
+# ================================
+tmp/
+temp/
+.cache/
+*.tmp
+*.temp
+
+# ================================
+# Uploads
+# ================================
+uploads/*
+!uploads/.gitkeep
+
+# ================================
+# Generated reports
+# ================================
+reports/*
+!reports/.gitkeep
+
+# ================================
+# Backups
+# ================================
+backup/
+backups/
+*.bak
+*.old
+
+# ================================
+# Jupyter
+# ================================
+.ipynb_checkpoints/
+
+# ================================
+# PythonAnywhere
+# ================================
+.pythonanywhere/
+
+# ================================
+# Local configuration
+# ================================
+config.py
+settings.local.py

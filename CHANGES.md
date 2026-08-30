@@ -392,3 +392,26 @@ no single hospital.
   before, since a CEO's own view never spans more than one organization to begin with).
 
 No migration needed — this is routing/template logic only.
+
+## 18. Public landing page
+Visiting the site root previously redirected straight to the login form — there was no public marketing
+page at all. Added one, and wired it in as the actual homepage for anyone not logged in.
+
+**No migration needed** — routing and a new template only.
+
+- `app/main/routes.py`: `/` no longer requires login. Anonymous visitors now see the new landing page;
+  anyone already logged in still lands on their normal dashboard exactly as before (nothing changed
+  there).
+- New `app/templates/main/landing.html`: hero, feature grid, "how it works," a security/trust section
+  (given how much real work went into isolation, role scoping, audit logging, and login lockout this
+  session — genuinely worth a section, not filler), and an accurate pricing table pulled straight from
+  `SUBSCRIPTION_PRICING`/`ONE_TIME_PRICING`/`TRIAL_DAYS` in `models.py` — no invented numbers.
+- Visual identity matches the social ad graphic from earlier (same palette, wordmark, paper-records
+  motif) so the two feel like one campaign rather than two unrelated pieces.
+- Register/Login buttons point at your real `auth.register_organization` / `auth.login` routes — a
+  visitor can go from the homepage straight into signing up.
+
+**On testing this yourself**: I can't render Tailwind's CDN-loaded styling in my sandbox (no internet
+there), so I validated it structurally (HTML tag balance checked programmatically) but couldn't
+screenshot the final styled result myself. Open it in an actual browser before considering it done —
+if anything looks off, send me a screenshot the same way you have been and I'll fix it.

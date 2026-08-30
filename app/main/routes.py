@@ -1,7 +1,7 @@
 import datetime
 
 from flask import Blueprint, render_template
-from flask_login import login_required, current_user
+from flask_login import current_user
 
 from app.models import (
     Hospital, User, Visit, Admission, Ward, Bill, Payment,
@@ -113,8 +113,10 @@ def _hospital_stats(hospital):
 
 
 @main_bp.route("/")
-@login_required
 def dashboard():
+    if not current_user.is_authenticated:
+        return render_template("main/landing.html", current_year=datetime.date.today().year)
+
     if current_user.role.scope == "platform":
         # System Maintainer — no single hospital or organization to
         # scope to by definition, so show every hospital on the install,
