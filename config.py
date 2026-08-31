@@ -67,6 +67,9 @@ class Config:
     HOST = os.environ.get("HOST", "127.0.0.1")
     PORT = _env_int("PORT", 5000)
 
+    # --- site identity (used for canonical URLs, Open Graph tags, sitemap) ---
+    SITE_URL = os.environ.get("SITE_URL", "https://multihospitalmanagementsystem.pythonanywhere.com")
+
     # --- new-account defaults — see admin/routes.py:users_create() ---
     DEFAULT_TEMP_PASSWORD = os.environ.get("DEFAULT_TEMP_PASSWORD", "ChangeMe123!")
 

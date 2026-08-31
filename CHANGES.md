@@ -415,3 +415,54 @@ page at all. Added one, and wired it in as the actual homepage for anyone not lo
 there), so I validated it structurally (HTML tag balance checked programmatically) but couldn't
 screenshot the final styled result myself. Open it in an actual browser before considering it done —
 if anything looks off, send me a screenshot the same way you have been and I'll fix it.
+
+## 19. Meta, social sharing, and SEO for the landing page
+**No migration needed** — static assets, config, and template/head changes only.
+
+- **Config** (`config.py`, `.env.example`): new `SITE_URL` setting — the canonical domain used to build
+  absolute URLs for Open Graph tags, the sitemap, and `robots.txt`. Defaults to your current PythonAnywhere
+  URL; **update this in `.env` once you're on a custom domain**, or every shared link and sitemap entry
+  will keep pointing at the old one.
+- **Favicon**: `app/static/img/favicon.svg` (the logo mark, standalone) plus rasterized
+  `favicon-16.png` / `favicon-32.png` / `apple-touch-icon.png` — modern browsers use the SVG, older ones
+  and iOS home-screen bookmarks fall back to the PNGs.
+- **Social share image**: `app/static/img/og-image.png` (1200×630 — the standard size Facebook/LinkedIn/
+  Twitter/WhatsApp all expect). Built as an SVG first and rasterized to PNG, since most link-preview
+  crawlers won't render SVG directly — same visual language as the ad graphic and landing page, so a
+  shared link looks like it belongs to the same product.
+- **`app/templates/main/landing.html` `<head>`**: proper `<title>`/description, canonical URL, full Open
+  Graph tags (title/description/image/locale — `en_KE` for Kenya), Twitter Card tags, and a
+  `SoftwareApplication` JSON-LD block (name, category, pricing range) for search engines' structured data.
+- **`robots.txt` / `sitemap.xml`** (`app/main/routes.py`) — new routes, served from the domain root where
+  crawlers actually look (not `/static/`, which wouldn't be found by convention). `robots.txt` allows only
+  the homepage and disallows everything else — every other route in this app is a login-gated application
+  screen with no SEO value, and shouldn't show up in search results at all.
+- **Accessibility/semantic cleanup**: confirmed exactly one `<h1>` on the page with a clean `<h2>` hierarchy
+  per section (search engines weight heading structure), and every purely decorative inline SVG icon
+  (the logo mark, checkmarks, the hero graphic) now has `aria-hidden="true"` so screen readers don't
+  announce meaningless icon markup.
+
+**Worth doing once you're live**: submit `sitemap.xml` to Google Search Console, and test the share image
+with Facebook's Sharing Debugger and Twitter's Card Validator — social platforms cache old previews
+aggressively, so if you'd shared the link before this change, you may need to force a re-scrape there.
+
+## 20. Logo and favicon, drawn with HTML5 Canvas
+Rebuilt the favicon PNGs and added a standalone logo lockup, this time drawn with actual Canvas 2D
+drawing calls (`roundRect`, `fillText`, etc.) rather than hand-written SVG — both the canvas source files
+and the rendered PNGs are included.
+
+**No migration needed** — static assets only.
+
+- `favicon_canvas.html` / `logo_canvas.html`: open either directly in a browser to see it draw live and
+  click "Download PNG" to export your own copy anytime (uses `canvas.toDataURL()`) — useful if you want
+  to tweak a color or size yourself later without coming back for a new render.
+- `app/static/img/favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`, `favicon-512.png` —
+  regenerated from the canvas drawing, replacing the earlier SVG-rasterized versions. Same visual design,
+  same file paths, so nothing else needs to change — the landing page's `<head>` already points at these
+  exact filenames.
+- `app/static/img/logo.png` — new: a horizontal lockup (mark + "MediCore HMIS" wordmark + tagline),
+  transparent background, for anywhere you need the full logo rather than just the small icon mark —
+  letterheads, printed documents, a header bar, slide decks.
+- `favicon.svg` (the vector version) is untouched — Canvas can only output raster images, so the one
+  format it inherently can't replace is the SVG your browser prefers when available. Both now exist:
+  vector for browsers that support it, canvas-drawn PNG for everything that falls back.
