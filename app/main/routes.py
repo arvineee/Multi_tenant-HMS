@@ -1,6 +1,6 @@
 import datetime
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, current_app, Response
 from flask_login import current_user
 
 from app.models import (
@@ -112,10 +112,44 @@ def _hospital_stats(hospital):
     }
 
 
+@main_bp.route("/robots.txt")
+def robots_txt():
+    """Served at the domain root — this is where crawlers look, not
+    /static/robots.txt. Only the public landing page is meant to be
+    indexed; everything else is a login-gated application screen with
+    no SEO value and no business being in search results."""
+    lines = [
+        "User-agent: *",
+        "Allow: /$",
+        "Disallow: /*",
+        "",
+        f"Sitemap: {current_app.config['SITE_URL'].rstrip('/')}/sitemap.xml",
+    ]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@main_bp.route("/sitemap.xml")
+def sitemap_xml():
+    site_url = current_app.config["SITE_URL"].rstrip("/")
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>{site_url}/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>"""
+    return Response(xml, mimetype="application/xml")
+
+
 @main_bp.route("/")
 def dashboard():
     if not current_user.is_authenticated:
-        return render_template("main/landing.html", current_year=datetime.date.today().year)
+        return render_template(
+            "main/landing.html",
+            current_year=datetime.date.today().year,
+            site_url=current_app.config["SITE_URL"].rstrip("/"),
+        )
 
     if current_user.role.scope == "platform":
         # System Maintainer — no single hospital or organization to
