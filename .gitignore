@@ -8,5 +8,14 @@ instance/
 *.egg-info/
 .DS_Store
 
+# config.py reads everything from .env/environment variables — it holds
+# no secrets itself — but per request it's ignored here too. Practical
+# effect: future code changes to config.py won't come through on
+# `git pull` on the server; they'll need to be applied manually each
+# time. If that becomes annoying, the alternative is un-ignoring it
+# (safe, since it has no secrets) and relying on .env alone for anything
+# sensitive.
+config.py
+
 # Local database — back this up separately, don't rely on git for it.
 hospital.db

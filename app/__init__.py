@@ -33,6 +33,7 @@ def create_app(config_class=None):
     from app.subscription.routes import subscription_bp
     from app.manual.routes import manual_bp
     from app.sysadmin.routes import sysadmin_bp
+    from app.legal.routes import legal_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(admin_bp, url_prefix="/admin")
@@ -47,6 +48,7 @@ def create_app(config_class=None):
     app.register_blueprint(subscription_bp)
     app.register_blueprint(manual_bp)
     app.register_blueprint(sysadmin_bp)
+    app.register_blueprint(legal_bp)
 
     # Routes that must stay reachable even when an organization's trial has
     # expired and no subscription is active — otherwise nobody could ever
@@ -56,6 +58,7 @@ def create_app(config_class=None):
         "subscription.status", "subscription.checkout", "subscription.poll_payment",
         "subscription.simulate_payment", "subscription.webhook",
         "manual.download", "static",
+        "legal.privacy_policy", "legal.terms_of_service", "legal.refund_policy",
     }
 
     @app.before_request
@@ -110,5 +113,14 @@ def create_app(config_class=None):
         if app.config.get("SESSION_COOKIE_SECURE"):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
+
+    @app.context_processor
+    def inject_support_contact():
+        # Available in every template (base.html's sidebar links to it)
+        # without needing every single route to pass it explicitly.
+        return {
+            "support_whatsapp_number": app.config["SUPPORT_WHATSAPP_NUMBER"],
+            "support_whatsapp_message": "Hi! I need help with MediCore HMIS.",
+        }
 
     return app

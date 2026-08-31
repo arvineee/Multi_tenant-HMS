@@ -46,6 +46,16 @@
                class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
       </div>
 
+      <label class="flex items-start gap-2 text-xs text-slate-600 mb-4">
+        <input type="checkbox" name="agree_terms" required class="mt-0.5">
+        <span>
+          I agree to the
+          <a href="{{ url_for('legal.terms_of_service') }}" target="_blank" class="text-emerald-700 hover:underline font-medium">Terms of Service</a>
+          and
+          <a href="{{ url_for('legal.privacy_policy') }}" target="_blank" class="text-emerald-700 hover:underline font-medium">Privacy Policy</a>.
+        </span>
+      </label>
+
       <button type="submit"
               class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 rounded transition">
         Create Organization

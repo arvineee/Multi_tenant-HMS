@@ -466,3 +466,47 @@ and the rendered PNGs are included.
 - `favicon.svg` (the vector version) is untouched — Canvas can only output raster images, so the one
   format it inherently can't replace is the SVG your browser prefers when available. Both now exist:
   vector for browsers that support it, canvas-drawn PNG for everything that falls back.
+
+## 21. Facility Operator role for small (Level 1/2) facilities
+A Level 1 community unit or Level 2 dispensary is often staffed by one or two people — there's no
+separate triage nurse, doctor, pharmacist, and billing clerk to split five accounts across. Added a role
+that bundles the full front-line operational permission set into one account.
+
+**No migration needed** — new role/permission rows only, via `seed.py` (re-run `python seed.py`).
+
+- New **Facility Operator** role (`seed.py`): patient registration, triage, consultation, prescribing,
+  pharmacy dispense + stock, lab order + result, radiology order + report, billing — everything needed
+  to run a patient visit start to finish solo.
+- Deliberately **excludes** admin-level permissions (catalogs, settings, users, pricing) — those stay on
+  the CEO account created at registration, since they're setup tasks, not daily operations. The same
+  person can just use both logins.
+- **Restricted to Level 1/2 hospitals only**, enforced server-side in `admin/routes.py:users_create()` —
+  can't be assigned to a Level 3+ facility, where separating who triages from who bills from who dispenses
+  is the actual point. A UI hint on the Users page explains this before submission, not after.
+- Inpatient admission and advanced radiology are already blocked for Level 1/2 by the existing
+  `level_policy.py` regardless of what permissions a role has — so this role can't accidentally grant
+  more than a small facility is actually allowed to do.
+
+## 22. WhatsApp support, legal pages, and .gitignore
+- **WhatsApp support** — a floating "Chat with us" button on the landing page, a "Contact Support" link
+  in the authenticated sidebar, and links from all three legal pages below. Built as a `wa.me` click-to-
+  chat link (`config.py`: `SUPPORT_WHATSAPP_NUMBER`, defaults to +254700459966) — no API, no credentials,
+  no cost. Clicking it opens WhatsApp with a message pre-addressed to you. If you actually wanted
+  *automated* backend alerts (e.g. "notify me on WhatsApp when someone registers"), that's a different,
+  bigger feature needing a real WhatsApp Business API integration — say so and I'll scope that separately.
+- **Three new public pages** (`app/legal/`, no login required, exempt from the trial/billing gate):
+  Privacy Policy, Terms of Service, Refund Policy. Privacy Policy is grounded in the actual Kenya Data
+  Protection Act, 2019 framework (data controller = each hospital, data processor = the platform) and
+  what's genuinely built (data isolation, audit logs, RBAC, login lockout) rather than generic
+  boilerplate.
+  **I'm not a lawyer — have these reviewed before relying on them**, especially the Refund Policy's
+  specific terms (7-day window on one-time purchases, etc.), which are reasonable defaults I picked, not
+  confirmed business decisions.
+- **Registration now requires agreeing to the Terms of Service and Privacy Policy** — a required checkbox
+  on the signup form, enforced server-side too (not just a UI-only checkbox that does nothing if skipped).
+- **`.gitignore`**: added `config.py` as requested. One thing worth knowing: `config.py` holds no secrets
+  itself (everything sensitive comes from `.env`, which was already ignored) — gitignoring it means future
+  code changes to `config.py` won't come through automatically on `git pull` on your server; you'll need to
+  apply them manually each time. If that gets annoying, the alternative is un-ignoring it again (safe,
+  since there's nothing sensitive in it) and relying on `.env` alone for anything that actually needs to
+  stay secret.

@@ -70,6 +70,11 @@ class Config:
     # --- site identity (used for canonical URLs, Open Graph tags, sitemap) ---
     SITE_URL = os.environ.get("SITE_URL", "https://multihospitalmanagementsystem.pythonanywhere.com")
 
+    # --- support contact — WhatsApp click-to-chat, no API/credentials
+    # needed. Digits only, country code first, no "+" (that's the format
+    # wa.me links expect). ---
+    SUPPORT_WHATSAPP_NUMBER = os.environ.get("SUPPORT_WHATSAPP_NUMBER", "254700459966")
+
     # --- new-account defaults — see admin/routes.py:users_create() ---
     DEFAULT_TEMP_PASSWORD = os.environ.get("DEFAULT_TEMP_PASSWORD", "ChangeMe123!")
 

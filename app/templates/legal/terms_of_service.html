@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms of Service — MediCore HMIS</title>
+<meta name="robots" content="index, follow">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { --paper:#F6F2E8; --ink:#14201C; --teal:#0E3B36; --emerald:#16A34A; --gold:#E0972E; --line:#D9CFB8; }
+  body { font-family:'Inter',Arial,sans-serif; background:var(--paper); color:var(--ink); }
+  .display { font-family:'Poppins',Arial,sans-serif; }
+  h2 { font-family:'Poppins',Arial,sans-serif; font-weight:700; font-size:1.375rem; margin-top:2.5rem; margin-bottom:0.75rem; }
+  p, li { line-height:1.7; color:#374B44; }
+  ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body class="antialiased">
+
+  <header class="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
+    <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--teal);" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><rect x="7" y="0" width="4" height="18" rx="1.5" fill="var(--paper)"/><rect x="0" y="7" width="18" height="4" rx="1.5" fill="var(--paper)"/></svg>
+      </div>
+      <span class="display font-extrabold text-lg">MediCore <span style="color: var(--teal);">HMIS</span></span>
+    </a>
+    <a href="{{ url_for('main.dashboard') }}" class="text-sm font-semibold" style="color: var(--teal);">&larr; Back home</a>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 pb-24">
+    <h1 class="display font-extrabold text-4xl mb-2">Terms of Service</h1>
+    <p class="text-sm text-slate-500 mb-8">Last updated: {{ last_updated }}</p>
+
+    <p>
+      By registering an organization or logging into MediCore HMIS, you agree to these terms. If you're
+      registering on behalf of a hospital, clinic, or dispensary, you're confirming you have the authority
+      to do so for that organization.
+    </p>
+
+    <h2>1. The service</h2>
+    <p>
+      MediCore HMIS is hospital management software covering outpatient and inpatient care, pharmacy and
+      stock control, billing and insurance tracking, and lab/radiology ordering — with functionality
+      adjusted to what's appropriate for your facility's KEPH level (Level 1 through Level 6).
+    </p>
+
+    <h2>2. Accounts</h2>
+    <ul>
+      <li>You're responsible for keeping your login credentials confidential and for activity on your account.</li>
+      <li>New staff accounts are created with a temporary password and must set their own on first login.</li>
+      <li>Tell us promptly if you believe an account has been compromised.</li>
+      <li>You must provide accurate registration information for your organization and facility.</li>
+    </ul>
+
+    <h2>3. Free trial &amp; subscriptions</h2>
+    <ul>
+      <li>New organizations get a free trial to explore the platform before subscribing — no card required to start it.</li>
+      <li>After the trial, continued access requires an active subscription, priced by facility level, billed monthly or available as a one-time purchase.</li>
+      <li>Payments are processed through IntaSend, including M-Pesa. See our <a href="{{ url_for('legal.refund_policy') }}" class="font-semibold" style="color: var(--teal);">Refund Policy</a> for cancellation and refund terms.</li>
+      <li>We may change pricing going forward; existing subscriptions are honored for their current paid period.</li>
+    </ul>
+
+    <h2>4. Acceptable use</h2>
+    <p>You agree not to:</p>
+    <ul>
+      <li>Use the platform for anything unlawful, or to store data you don't have a lawful basis to hold.</li>
+      <li>Attempt to access another organization's data, bypass access controls, or interfere with the platform's security.</li>
+      <li>Reverse-engineer, resell, or sublicense the software without our agreement.</li>
+      <li>Use the platform in a way that endangers patient safety — it's a records and workflow tool, not a substitute for clinical judgment.</li>
+    </ul>
+
+    <h2>5. Your data</h2>
+    <p>
+      Your organization owns the data you enter into the platform. We process it on your behalf as
+      described in our <a href="{{ url_for('legal.privacy_policy') }}" class="font-semibold" style="color: var(--teal);">Privacy Policy</a>.
+      You're responsible for the accuracy of clinical and billing data your staff enter, and for your own
+      compliance with applicable health-records and data-protection law.
+    </p>
+
+    <h2>6. Availability</h2>
+    <p>
+      We work to keep the platform available and reliable, but we don't guarantee uninterrupted access —
+      maintenance, third-party infrastructure issues, or connectivity problems can cause downtime. Keep
+      appropriate manual/paper backup procedures for anything genuinely time-critical.
+    </p>
+
+    <h2>7. Suspension &amp; termination</h2>
+    <ul>
+      <li>You may stop using the platform and close your account at any time.</li>
+      <li>We may suspend or terminate access for violation of these terms, non-payment after the trial/subscription lapses, or unlawful use.</li>
+      <li>On termination, you remain responsible for retaining copies of records you're legally required to keep — talk to us in advance if you need an export.</li>
+    </ul>
+
+    <h2>8. Limitation of liability</h2>
+    <p>
+      The platform is provided "as is." To the maximum extent permitted by Kenyan law, MediCore HMIS is
+      not liable for indirect, incidental, or consequential damages arising from use of the platform.
+      Nothing here limits liability where the law doesn't allow it to be limited.
+    </p>
+
+    <h2>9. Governing law</h2>
+    <p>These terms are governed by the laws of the Republic of Kenya.</p>
+
+    <h2>10. Changes to these terms</h2>
+    <p>We'll update the date above when these terms change materially, and notify organization administrators where appropriate.</p>
+
+    <h2>11. Contact</h2>
+    <p>
+      Questions about these terms: message us on WhatsApp at
+      <a href="https://wa.me/{{ support_whatsapp_number }}" class="font-semibold" style="color: var(--teal);">+{{ support_whatsapp_number }}</a>.
+    </p>
+
+    <p class="text-xs text-slate-400 mt-12 border-t pt-4" style="border-color: var(--line);">
+      This is a general set of terms and isn't a substitute for legal advice tailored to your
+      organization or jurisdiction-specific obligations.
+    </p>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-6 py-10 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-500 border-t" style="border-color: var(--line);">
+    <span>&copy; {{ current_year }} MediCore HMIS.</span>
+    <div class="flex gap-6">
+      <a href="{{ url_for('legal.privacy_policy') }}" class="hover:opacity-70">Privacy Policy</a>
+      <a href="{{ url_for('legal.refund_policy') }}" class="hover:opacity-70">Refund Policy</a>
+    </div>
+  </footer>
+
+</body>
+</html>

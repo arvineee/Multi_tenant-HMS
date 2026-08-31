@@ -88,6 +88,31 @@ ROLES = {
     "Billing / Insurance Clerk": ("department", [
         "patient.view", "billing.manage",
     ]),
+    # For a Level 1 (community unit) or Level 2 (dispensary) facility
+    # commonly staffed by just one or two people — a single clinical
+    # officer/nurse who registers the patient, triages, consults,
+    # prescribes, dispenses, orders and reads back basic labs/X-ray, and
+    # bills, all themselves. Bundles the full front-line operational
+    # permission set into one role rather than needing five separate
+    # logins for a facility that only has one person on shift.
+    # Deliberately excludes admin-level permissions (catalogs, settings,
+    # users, pricing) — those stay on the CEO account set up at
+    # registration, since they're setup tasks, not daily operations.
+    # Restricted at assignment time (admin/routes.py:users_create) to
+    # hospitals whose level is actually Level 1 or Level 2 — the
+    # inpatient/advanced-radiology ceiling for those levels is already
+    # enforced separately by app/level_policy.py regardless of what this
+    # role can do, so there's no risk of it granting more than a small
+    # facility is actually allowed to perform.
+    "Facility Operator": ("hospital", [
+        "patient.view", "patient.register",
+        "triage.create",
+        "consultation.create", "prescription.create",
+        "lab.order", "lab.result",
+        "radiology.order", "radiology.report",
+        "pharmacy.dispense", "pharmacy.stock",
+        "billing.manage",
+    ]),
     # Platform-level maintenance access — sees every hospital across every
     # organization, plus the system diagnostics dashboard. Deliberately
     # its own scope ("platform"), separate from "organization" (CEO):

@@ -56,16 +56,20 @@
       <input name="username" placeholder="Username" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
       <input name="email" type="email" placeholder="Email" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
       <input name="phone" placeholder="Phone" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
-      <select name="role_id" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <select name="role_id" id="role-select" required onchange="toggleOperatorHint()" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
         <option value="">Select role...</option>
         {% for r in roles %}
-        <option value="{{ r.id }}">{{ r.name }}</option>
+        <option value="{{ r.id }}" data-name="{{ r.name }}">{{ r.name }}</option>
         {% endfor %}
       </select>
+      <p id="operator-hint" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+        Facility Operator bundles triage, consultation, pharmacy, and billing into one account — only
+        assignable to a Level 1 or Level 2 hospital below.
+      </p>
       <select name="hospital_id" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
         <option value="">Head Office (CEO-level, no hospital)</option>
         {% for h in hospitals %}
-        <option value="{{ h.id }}">{{ h.name }}</option>
+        <option value="{{ h.id }}" data-level="{{ h.level }}">{{ h.name }} ({{ h.level }})</option>
         {% endfor %}
       </select>
       <p class="text-xs text-slate-500">A temporary password is generated. The staff member must change it on first login.</p>
@@ -110,6 +114,13 @@ async function unlockUser(userId) {
   } else {
     showToast(data.error || 'Could not unlock account.', true);
   }
+}
+
+function toggleOperatorHint() {
+  const select = document.getElementById('role-select');
+  const opt = select.options[select.selectedIndex];
+  const isOperator = opt && opt.dataset.name === 'Facility Operator';
+  document.getElementById('operator-hint').classList.toggle('hidden', !isOperator);
 }
 </script>
 {% endblock %}

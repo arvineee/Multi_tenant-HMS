@@ -144,6 +144,8 @@ def register_organization():
     required = [org_name, hospital_name, hospital_code, admin_full_name, admin_username, admin_email, admin_password]
     if not all(required):
         return jsonify(success=False, error="All fields are required."), 400
+    if str(data.get("agree_terms", "")).lower() not in ("1", "true", "on", "yes"):
+        return jsonify(success=False, error="You must agree to the Terms of Service and Privacy Policy."), 400
     if len(admin_password) < 8:
         return jsonify(success=False, error="Password must be at least 8 characters."), 400
     if User.query.filter((User.username == admin_username) | (User.email == admin_email)).first():

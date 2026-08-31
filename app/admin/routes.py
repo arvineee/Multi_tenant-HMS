@@ -231,6 +231,15 @@ def users_create():
         if current_user.role.scope != "organization" and hospital.id not in current_user.accessible_hospital_ids():
             return jsonify(success=False, error="You can't assign users outside your hospital(s)."), 403
 
+        # Facility Operator bundles a lot of permission into one account —
+        # only sensible for the small, thinly-staffed facilities it was
+        # built for. Kept out of larger facilities where separating who
+        # triages from who bills from who dispenses is the point.
+        if role.name == "Facility Operator" and hospital.level not in ("Level 1", "Level 2"):
+            return jsonify(success=False, error="Facility Operator is only for Level 1 or Level 2 facilities."), 400
+    elif role.name == "Facility Operator":
+        return jsonify(success=False, error="Select a Level 1 or Level 2 hospital for a Facility Operator account."), 400
+
     user = User(
         organization_id=current_user.organization_id,
         hospital_id=hospital_id,

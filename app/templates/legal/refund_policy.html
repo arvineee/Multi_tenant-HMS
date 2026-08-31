@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refund Policy — MediCore HMIS</title>
+<meta name="robots" content="index, follow">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { --paper:#F6F2E8; --ink:#14201C; --teal:#0E3B36; --emerald:#16A34A; --gold:#E0972E; --line:#D9CFB8; }
+  body { font-family:'Inter',Arial,sans-serif; background:var(--paper); color:var(--ink); }
+  .display { font-family:'Poppins',Arial,sans-serif; }
+  h2 { font-family:'Poppins',Arial,sans-serif; font-weight:700; font-size:1.375rem; margin-top:2.5rem; margin-bottom:0.75rem; }
+  p, li { line-height:1.7; color:#374B44; }
+  ul { list-style: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.4rem; }
+</style>
+</head>
+<body class="antialiased">
+
+  <header class="max-w-4xl mx-auto px-6 py-6 flex items-center justify-between">
+    <a href="{{ url_for('main.dashboard') }}" class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--teal);" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><rect x="7" y="0" width="4" height="18" rx="1.5" fill="var(--paper)"/><rect x="0" y="7" width="18" height="4" rx="1.5" fill="var(--paper)"/></svg>
+      </div>
+      <span class="display font-extrabold text-lg">MediCore <span style="color: var(--teal);">HMIS</span></span>
+    </a>
+    <a href="{{ url_for('main.dashboard') }}" class="text-sm font-semibold" style="color: var(--teal);">&larr; Back home</a>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 pb-24">
+    <h1 class="display font-extrabold text-4xl mb-2">Refund Policy</h1>
+    <p class="text-sm text-slate-500 mb-8">Last updated: {{ last_updated }}</p>
+
+    <h2>Free trial</h2>
+    <p>
+      Every new organization gets a free trial to explore MediCore HMIS before paying anything — no card
+      required to start it. Use this period to confirm the platform fits your facility before subscribing.
+    </p>
+
+    <h2>Monthly subscriptions</h2>
+    <p>
+      Monthly subscription fees are charged for the upcoming billing period. Because access is granted
+      immediately for that period, payments already made for the current month are non-refundable, but you
+      can cancel at any time to stop future charges — you'll keep access through the end of the period
+      you've already paid for.
+    </p>
+
+    <h2>One-time (outright) purchase</h2>
+    <p>
+      A one-time purchase is a larger, considered commitment rather than a recurring charge. If you
+      believe the platform genuinely doesn't work for your facility, contact us within 7 days of purchase
+      to discuss a refund — this is handled case by case rather than as an automatic right, since it
+      follows significant setup on our side.
+    </p>
+
+    <h2>Billing errors</h2>
+    <p>
+      If you're charged in error — a duplicate charge, or a charge after you'd already cancelled — contact
+      us and we'll correct it.
+    </p>
+
+    <h2>How to request a refund</h2>
+    <p>
+      Message us on WhatsApp at
+      <a href="https://wa.me/{{ support_whatsapp_number }}" class="font-semibold" style="color: var(--teal);">+{{ support_whatsapp_number }}</a>
+      with your organization name and the payment in question.
+    </p>
+
+    <p class="text-xs text-slate-400 mt-12 border-t pt-4" style="border-color: var(--line);">
+      These are starting terms, not yet confirmed business policy — if your actual intended refund terms
+      differ (a specific refund window, prorated refunds, etc.), this page should be updated to match
+      before it's relied on by customers.
+    </p>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-6 py-10 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-500 border-t" style="border-color: var(--line);">
+    <span>&copy; {{ current_year }} MediCore HMIS.</span>
+    <div class="flex gap-6">
+      <a href="{{ url_for('legal.privacy_policy') }}" class="hover:opacity-70">Privacy Policy</a>
+      <a href="{{ url_for('legal.terms_of_service') }}" class="hover:opacity-70">Terms of Service</a>
+    </div>
+  </footer>
+
+</body>
+</html>

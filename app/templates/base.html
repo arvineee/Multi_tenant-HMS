@@ -86,6 +86,7 @@
       <div class="flex gap-3 mt-1">
         <a href="{{ url_for('auth.change_password') }}" class="text-xs text-slate-400 hover:text-slate-200">Change Password</a>
         <a href="{{ url_for('manual.download') }}" class="text-xs text-slate-400 hover:text-slate-200">User Manual</a>
+        <a href="https://wa.me/{{ support_whatsapp_number }}?text={{ support_whatsapp_message | urlencode }}" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-slate-200">Contact Support</a>
         <a href="{{ url_for('auth.logout') }}" class="text-xs text-red-400 hover:text-red-300">Log out</a>
       </div>
     </div>
