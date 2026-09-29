@@ -97,7 +97,8 @@ def create_app(config_class=None):
     # pay to get back in, and login/static assets would break too.
     EXEMPT_ENDPOINTS = {
         "auth.login", "auth.logout", "auth.register_organization", "auth.change_password",
-        "security.mfa_verify", "security.mfa_setup", "security.mfa_confirm", "security.dha_login", "security.dha_callback",
+        "security.mfa_verify", "security.mfa_setup", "security.mfa_start", "security.mfa_qr", "security.mfa_confirm",
+        "security.dha_login", "security.dha_callback",
         "hie.inbound",
         "subscription.status", "subscription.checkout", "subscription.poll_payment",
         "subscription.simulate_payment", "subscription.webhook",
@@ -187,3 +188,4 @@ def create_app(config_class=None):
         }
 
     return app
+
