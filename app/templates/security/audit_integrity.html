@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Audit integrity{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-3">Audit trail integrity</h1>
+<div class="bg-white rounded shadow p-4 max-w-2xl text-sm space-y-2">
+  <p>Status: {% if result.ok %}<b class="text-emerald-700">No tampering detected</b>{% else %}<b class="text-red-700">Problems found</b>{% endif %}</p>
+  <p>{{ result.total }} entries · {{ result.sealed }} sealed in the hash chain · {{ result.legacy }} written before the chain existed.</p>
+  {% if result.tampered %}<p class="text-red-700">Altered entries (ids): {{ result.tampered|join(', ') }}</p>{% endif %}
+  {% if result.broken_links %}<p class="text-red-700">Entries whose predecessor is missing (ids): {{ result.broken_links|join(', ') }}</p>{% endif %}
+  <p class="text-slate-600">Latest chain hash (copy this somewhere independent now and then, e.g. an email to yourself): <code class="break-all">{{ result.last_hash or '-' }}</code></p>
+  <p class="text-slate-600">Retention policy: {{ retention }} years. Nothing is deleted automatically. Verify from the command line with <code>flask verify-integrity</code>.</p>
+</div>
+{% endblock %}

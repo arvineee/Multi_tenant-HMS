@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}DHA Compliance{% endblock %}
+{% block content %}
+<div class="flex items-end justify-between mb-2"><h1 class="text-2xl font-bold">DHA compliance readiness</h1>
+<p class="text-sm">Overall: <b class="text-2xl">{{ overall }}%</b></p></div>
+<p class="text-sm text-slate-600 mb-4 max-w-3xl">Each line mirrors an item on the DHA attestation form. <b class="text-emerald-700">Ready</b> = built and verified here. <b class="text-amber-700">Partial</b> = built but needs configuration, credentials or data. <b class="text-red-700">Action</b> = not satisfied yet. <b class="text-slate-700">Manual</b> = only a person can confirm it (attest at the bottom). Only tick an item on the DHA form when you can honestly stand behind it.</p>
+<div class="flex flex-wrap gap-3 text-sm mb-4">
+  <a class="underline text-blue-700" href="{{ url_for('security.data_protection') }}">Data protection register</a>
+  <a class="underline text-blue-700" href="{{ url_for('security.policy') }}">MFA policy</a>
+  <a class="underline text-blue-700" href="{{ url_for('security.emergency_review') }}">Emergency access review</a>
+  <a class="underline text-blue-700" href="{{ url_for('security.audit_integrity') }}">Audit integrity</a>
+  <a class="underline text-blue-700" href="{{ url_for('terminology.index') }}">Terminology</a>
+  <a class="underline text-blue-700" href="{{ url_for('cds.settings') }}">Decision support</a>
+  <a class="underline text-blue-700" href="{{ url_for('reporting.diseases') }}">Notifiable diseases</a>
+</div>
+<div class="grid lg:grid-cols-2 gap-4">
+{% for title, items, pct in sections %}
+<section class="bg-white rounded shadow p-4"><div class="flex justify-between mb-2"><h2 class="font-semibold">{{ title }}</h2><span class="text-sm text-slate-500">{{ pct }}%</span></div>
+<ul class="text-sm space-y-1">
+{% for i in items %}<li class="flex gap-2"><span class="mt-0.5 shrink-0 text-xs rounded px-1.5 py-0.5 h-fit
+ {{ 'bg-emerald-100 text-emerald-800' if i.status == 'ready' else 'bg-amber-100 text-amber-800' if i.status == 'partial' else 'bg-red-100 text-red-800' if i.status == 'action' else 'bg-slate-200 text-slate-700' }}">{{ i.status|capitalize }}</span>
+<span>{% if i.link %}<a class="underline" href="{{ url_for(i.link) }}">{{ i.label }}</a>{% else %}{{ i.label }}{% endif %}{% if i.detail %}<br><span class="text-xs text-slate-500">{{ i.detail }}</span>{% endif %}</span></li>{% endfor %}
+</ul></section>{% endfor %}
+</div>
+<section class="bg-white rounded shadow p-4 mt-6"><h2 class="font-semibold mb-1">Confirmations only a person can make</h2>
+<p class="text-xs text-slate-500 mb-2">Ticking these is a statement to your regulator. Leave unticked unless true.</p>
+{% for key, label in attestations.items() %}
+<form data-post="{{ url_for('compliance.attest') }}" data-reload class="flex items-center gap-2 text-sm py-1 border-t">
+  <input type="hidden" name="item_key" value="{{ key }}"><input type="hidden" name="value" value="{{ '' if (att.get(key) and att[key].value) else '1' }}">
+  <span class="flex-1">{{ label }}{% if att.get(key) and att[key].value %}<span class="text-xs text-emerald-700"> — confirmed {{ att[key].attested_at.strftime('%d %b %Y') }}</span>{% endif %}</span>
+  {% if can_attest %}<button class="text-xs underline text-blue-700">{{ 'Withdraw' if (att.get(key) and att[key].value) else 'Confirm' }}</button>{% endif %}
+</form>{% endfor %}</section>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Hospitals & Branches{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Hospitals / Branches</h1>
+  <button onclick="document.getElementById('add-modal').classList.remove('hidden')"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    + Add Hospital
+  </button>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-slate-500">
+      <tr>
+        <th class="px-4 py-3">Name</th>
+        <th class="px-4 py-3">Code</th>
+        <th class="px-4 py-3">Level</th>
+        <th class="px-4 py-3">County</th>
+        <th class="px-4 py-3">Status</th>
+      </tr>
+    </thead>
+    <tbody id="hospital-rows">
+      {% for h in hospitals %}
+      <tr class="border-t border-slate-100">
+        <td class="px-4 py-3 font-medium">{{ h.name }}</td>
+        <td class="px-4 py-3">{{ h.code }}</td>
+        <td class="px-4 py-3">{{ h.level }}</td>
+        <td class="px-4 py-3">{{ h.county or '-' }}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-1 rounded text-xs {{ 'bg-emerald-100 text-emerald-700' if h.is_active else 'bg-red-100 text-red-700' }}">
+            {{ 'Active' if h.is_active else 'Inactive' }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Add hospital modal -->
+<div id="add-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+    <h2 class="font-bold text-lg mb-4">Add Hospital / Branch</h2>
+    <form id="hospital-form" class="space-y-3">
+      <input name="name" placeholder="Hospital name" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="code" placeholder="Short code e.g. NRB-04" required class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <select name="level" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+        {% for lvl in levels %}
+        <option value="{{ lvl }}">{{ lvl }}</option>
+        {% endfor %}
+      </select>
+      <input name="county" placeholder="County" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <input name="phone" placeholder="Phone" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('add-modal').classList.add('hidden')"
+                class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+        <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('hospital-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const payload = Object.fromEntries(form.entries());
+  const data = await postJSON("{{ url_for('admin.hospitals_create') }}", payload);
+  if (data.success) {
+    showToast('Hospital added.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not add hospital.', true);
+  }
+});
+</script>
+{% endblock %}

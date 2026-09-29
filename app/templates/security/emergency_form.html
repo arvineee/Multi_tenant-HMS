@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Emergency access{% endblock %}
+{% block content %}
+<div class="max-w-xl">
+  <h1 class="text-2xl font-bold mb-2 text-red-700">Emergency (break-glass) access</h1>
+  <p class="text-sm text-slate-600 mb-4">Use this only when a patient needs urgent care and you would not normally have access to their record (for example, they were treated at another branch). Access is read-only, lasts {{ minutes }} minutes, is recorded, and is reviewed by a manager.</p>
+  <form data-post="{{ url_for('security.emergency_request') }}" class="bg-white rounded shadow p-4 space-y-3">
+    <input name="patient_number" required placeholder="Patient number" class="w-full border rounded px-3 py-2">
+    <textarea name="reason" required rows="3" placeholder="Why do you need emergency access?" class="w-full border rounded px-3 py-2"></textarea>
+    <button class="bg-red-600 text-white rounded px-4 py-2 text-sm">Open the record</button>
+  </form>
+  {% if mine %}<h2 class="font-semibold mt-6 mb-2">Your recent emergency access</h2>
+  <ul class="text-sm space-y-1">{% for g in mine %}<li>{{ g.granted_at.strftime('%d %b %H:%M') }} — patient {{ g.patient.patient_number }} — {{ g.review_outcome }}{% if g.is_active %} <b class="text-red-600">(active)</b>{% endif %}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endblock %}

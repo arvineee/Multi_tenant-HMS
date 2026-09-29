@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Data protection register{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Data protection register</h1>
+<p class="text-sm text-slate-600 mb-4">Records that support the Kenya Data Protection Act, 2019 items on the DHA form. MediCore stores the reference and evidence location; keep the actual certificate somewhere safe.</p>
+<div class="grid md:grid-cols-2 gap-6">
+<section class="bg-white rounded shadow p-4">
+  <h2 class="font-semibold mb-2">ODPC registrations</h2>
+  {% for r in regs %}<div class="border-t py-2 text-sm"><b>{{ r.role|capitalize }}</b>{% if not r.organization_id %} (platform){% endif %}: {{ r.registered_name }} — {{ r.registration_number }}<br>
+  <span class="text-xs {{ 'text-emerald-700' if r.is_current else 'text-red-600' }}">{{ 'Current' if r.is_current else 'Expired' }}{% if r.expires_on %} · expires {{ r.expires_on }}{% endif %}</span>{% if r.evidence_reference %}<br><span class="text-xs text-slate-500">Evidence: {{ r.evidence_reference }}</span>{% endif %}</div>{% else %}<p class="text-sm text-slate-500">None recorded yet.</p>{% endfor %}
+  <form data-post="{{ url_for('security.data_protection') }}" data-reload class="mt-3 space-y-2 text-sm">
+    <input type="hidden" name="kind" value="registration">
+    <select name="role" class="border rounded px-2 py-1 w-full"><option value="controller">Data controller (your organization)</option>{% if platform %}<option value="processor">Data processor (platform)</option>{% endif %}</select>
+    <input name="registered_name" placeholder="Registered name" required class="border rounded px-2 py-1 w-full">
+    <input name="registration_number" placeholder="ODPC registration number" required class="border rounded px-2 py-1 w-full">
+    <div class="flex gap-2"><input type="date" name="issued_on" class="border rounded px-2 py-1 flex-1"><input type="date" name="expires_on" class="border rounded px-2 py-1 flex-1"></div>
+    <input name="evidence_reference" placeholder="Where the certificate is kept" class="border rounded px-2 py-1 w-full">
+    <button class="bg-slate-900 text-white rounded px-3 py-1.5">Save registration</button>
+  </form>
+</section>
+<section class="bg-white rounded shadow p-4">
+  <h2 class="font-semibold mb-2">Data Protection Impact Assessments</h2>
+  {% for d in dpias %}<div class="border-t py-2 text-sm"><b>{{ d.title }}</b> v{{ d.version }} — {{ d.risk_level }} risk<br><span class="text-xs {{ 'text-emerald-700' if d.is_current else 'text-red-600' }}">Completed {{ d.completed_on }} by {{ d.assessor_name }}{% if d.next_review_on %} · review due {{ d.next_review_on }}{% endif %}</span></div>{% else %}<p class="text-sm text-slate-500">None recorded yet.</p>{% endfor %}
+  <form data-post="{{ url_for('security.data_protection') }}" data-reload class="mt-3 space-y-2 text-sm">
+    <input type="hidden" name="kind" value="dpia">
+    <input name="title" placeholder="Title" required class="border rounded px-2 py-1 w-full">
+    <input name="assessor_name" placeholder="Assessor" required class="border rounded px-2 py-1 w-full">
+    <div class="flex gap-2"><input type="date" name="completed_on" required class="border rounded px-2 py-1 flex-1"><input type="date" name="next_review_on" class="border rounded px-2 py-1 flex-1"></div>
+    <select name="risk_level" class="border rounded px-2 py-1 w-full"><option>Low</option><option selected>Medium</option><option>High</option></select>
+    <textarea name="mitigations_summary" rows="2" placeholder="Main mitigations" class="border rounded px-2 py-1 w-full"></textarea>
+    <input name="evidence_reference" placeholder="Where the full assessment is kept" class="border rounded px-2 py-1 w-full">
+    <button class="bg-slate-900 text-white rounded px-3 py-1.5">Save DPIA</button>
+  </form>
+</section></div>
+{% endblock %}

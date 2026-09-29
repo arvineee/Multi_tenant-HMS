@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Login · MediCore HMIS{% endblock %}
+{% block guest_content %}
+<div class="min-h-screen flex items-center justify-center bg-slate-900 px-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-8">
+    <h1 class="text-xl font-bold text-slate-800 mb-1">MediCore HMIS</h1>
+    <p class="text-sm text-slate-500 mb-6">Sign in to continue</p>
+
+    <div id="login-error" class="hidden mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+
+    <form id="login-form" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Username or Email</label>
+        <input type="text" name="username" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+        <input type="password" name="password" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <button type="submit"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2 rounded transition">
+        Log In
+      </button>
+    </form>
+
+    <p class="text-xs text-slate-400 mt-4 text-center">
+      New hospital or hospital group? <a href="{{ url_for('auth.register_organization') }}" class="text-emerald-700 hover:underline">Register your organization</a>
+    </p>
+  </div>
+</div>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorBox = document.getElementById('login-error');
+  errorBox.classList.add('hidden');
+
+  const form = e.target;
+  const payload = {
+    username: form.username.value.trim(),
+    password: form.password.value,
+  };
+
+  const res = await fetch("{{ url_for('auth.login') }}", {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+
+  if (data.success) {
+    window.location.href = data.redirect;
+  } else {
+    errorBox.textContent = data.error || 'Login failed.';
+    errorBox.classList.remove('hidden');
+  }
+});
+</script>
+{% endblock %}

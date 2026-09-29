@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Kenya HIE{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Kenya Health Information Exchange</h1>
+<p class="text-sm mb-4">Mode: <b>{{ mode }}</b>{% if mode == 'off' %} — nothing is exchanged. Set HIE_MODE to <code>mock</code> to rehearse, or <code>live</code> with DHA credentials.{% elif mode == 'mock' %} — messages are built and stored but not sent.{% endif %} · <a class="underline text-blue-700" href="{{ url_for('hie.inbox') }}">Inbox</a></p>
+<table class="bg-white rounded shadow text-sm w-full"><thead><tr class="text-left text-slate-500"><th class="p-2">When</th><th>Patient</th><th>Content</th><th>Status</th><th></th></tr></thead><tbody>
+{% for t in rows %}<tr class="border-t"><td class="p-2">{{ t.created_at.strftime('%d %b %H:%M') }}</td><td>{{ t.patient.patient_number if t.patient else '' }}</td><td>{{ t.resource_summary or '' }}</td>
+<td class="{{ 'text-emerald-700' if t.status in ['Sent','Mock'] else 'text-red-700' }}">{{ t.status }}{% if t.response_excerpt and t.status not in ['Sent','Mock'] %}<br><span class="text-xs text-slate-500">{{ t.response_excerpt[:120] }}</span>{% endif %}</td>
+<td><a class="underline text-xs text-blue-700" href="{{ url_for('hie.transaction_detail', tx_id=t.id) }}">View</a>{% if t.status == 'Failed' and t.bundle_json %} <button class="underline text-xs" data-action="{{ url_for('hie.retry', tx_id=t.id) }}" data-reload data-reload-always>Retry</button>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="p-4 text-slate-500">Nothing sent yet. Use “Send to HIE” on a patient's clinical summary.</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

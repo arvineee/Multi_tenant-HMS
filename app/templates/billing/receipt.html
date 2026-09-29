@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Receipt — {{ bill.patient.full_name }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0 !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 py-8 px-4">
+
+<div class="no-print max-w-3xl mx-auto mb-4 flex justify-between items-center">
+  <a href="javascript:history.back()" class="text-sm text-emerald-700 hover:underline">&larr; Back</a>
+  <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    Print / Save as PDF
+  </button>
+</div>
+
+<div class="bg-white max-w-3xl mx-auto p-10 shadow print:shadow-none" style="min-height: 29.7cm;">
+
+  <div class="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold">{{ bill.hospital.name }}</h1>
+      <p class="text-xs text-slate-500">{{ bill.hospital.level }}{% if bill.hospital.address %} · {{ bill.hospital.address }}{% endif %}</p>
+      <p class="text-xs text-slate-500">
+        {% if bill.hospital.phone %}Tel: {{ bill.hospital.phone }}{% endif %}
+        {% if bill.hospital.email %} · {{ bill.hospital.email }}{% endif %}
+      </p>
+    </div>
+    <div class="text-right text-xs text-slate-500">
+      <p class="font-mono font-semibold">RCPT-{{ bill.hospital.code }}-{{ bill.id }}</p>
+      <p>{{ bill.updated_at.strftime('%d %B %Y, %H:%M') }}</p>
+    </div>
+  </div>
+
+  <h2 class="text-lg font-bold text-center uppercase tracking-wide mb-6">
+    {{ 'Payment Receipt' if bill.status == 'Paid' else 'Statement' }}
+  </h2>
+
+  <table class="text-sm mb-6 w-full">
+    <tr>
+      <td class="py-1 text-slate-500 w-40">Patient Name</td>
+      <td class="py-1 font-medium">{{ bill.patient.full_name }}</td>
+      <td class="py-1 text-slate-500 w-32">Patient No.</td>
+      <td class="py-1 font-mono">{{ bill.patient.patient_number }}</td>
+    </tr>
+    <tr>
+      <td class="py-1 text-slate-500">Visit Date</td>
+      <td class="py-1">{{ bill.visit.created_at.strftime('%d %b %Y') }}</td>
+      <td class="py-1 text-slate-500">Payer</td>
+      <td class="py-1">{{ bill.insurance_scheme.name if bill.insurance_scheme else 'Cash / Self-pay' }}</td>
+    </tr>
+  </table>
+
+  <table class="w-full text-sm mb-4">
+    <thead class="text-left text-slate-400 text-xs border-b border-slate-200">
+      <tr><th class="pb-2">Item</th><th class="pb-2">Category</th><th class="pb-2 text-right">Qty</th><th class="pb-2 text-right">Amount</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for li in bill.line_items %}
+      <tr>
+        <td class="py-2">{{ li.description }}</td>
+        <td class="py-2 text-xs text-slate-500">{{ li.category }}</td>
+        <td class="py-2 text-right">{{ li.quantity | int }}</td>
+        <td class="py-2 text-right">{{ '%.2f' | format(li.amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="border-t border-slate-200 font-semibold">
+        <td colspan="3" class="py-2 text-right">Total</td>
+        <td class="py-2 text-right">KES {{ '%.2f' | format(bill.total_amount) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Payments Received</h3>
+  <table class="w-full text-sm mb-4">
+    <tbody class="divide-y divide-slate-100">
+      {% for p in bill.payments %}
+      <tr>
+        <td class="py-1">{{ p.paid_at.strftime('%d %b %Y, %H:%M') }}</td>
+        <td class="py-1">{{ p.method }}{% if p.reference %} · {{ p.reference }}{% endif %}</td>
+        <td class="py-1 text-right">KES {{ '%.2f' | format(p.amount) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="py-2 text-slate-400">No payments recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="w-full text-sm">
+    <tr class="font-semibold">
+      <td class="py-1 text-right w-full pr-4">Amount Paid</td>
+      <td class="py-1 text-right text-emerald-700">KES {{ '%.2f' | format(bill.amount_paid) }}</td>
+    </tr>
+    <tr class="font-bold text-base">
+      <td class="py-1 text-right pr-4">Balance Due</td>
+      <td class="py-1 text-right {{ 'text-red-600' if bill.balance_due > 0 else 'text-emerald-700' }}">KES {{ '%.2f' | format(bill.balance_due) }}</td>
+    </tr>
+  </table>
+
+  {% if bill.status == 'Waived' %}
+  <p class="text-xs text-slate-500 mt-4 italic">This bill was waived. {{ bill.notes or '' }}</p>
+  {% endif %}
+
+  <div class="mt-16 pt-6 border-t border-slate-200 flex justify-between items-end">
+    <div>
+      <p class="text-sm font-semibold">{{ bill.created_by.full_name if bill.created_by else '-' }}</p>
+      <p class="text-xs text-slate-500">Billing</p>
+      <p class="text-xs text-slate-400 mt-4">Signature: _______________________</p>
+    </div>
+    <div class="text-right text-xs text-slate-400">
+      <p>Official Stamp</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

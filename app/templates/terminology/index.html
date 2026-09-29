@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Terminology{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Terminology mapping</h1>
+<p class="text-sm text-slate-600 mb-4 max-w-3xl">DHA expects ICD-11, SNOMED CT, LOINC and HPT registry codes. MediCore ships ICD-10 and stores the other codes next to each catalog entry. Import the official mapping tables (KNHTS / WHO / HPT registry) as CSV — the mappings are not typed in by hand.</p>
+<table class="bg-white rounded shadow text-sm mb-6"><tbody>{% for name, (pct, total) in coverage.items() %}<tr class="border-t"><td class="p-2 pr-8">{{ name }}</td><td class="pr-6">{{ (pct ~ '%') if pct is not none else 'no entries' }}</td><td class="pr-4 text-slate-500">of {{ total }}</td></tr>{% endfor %}</tbody></table>
+<form data-upload="{{ url_for('terminology.import_csv') }}" data-reload class="bg-white rounded shadow p-4 text-sm space-y-2 max-w-xl">
+  <select name="kind" class="border rounded px-2 py-1 w-full"><option value="diagnosis">Diagnoses — columns: code, icd11_code, snomed_ct_code</option><option value="lab">Lab tests — columns: code, loinc_code, snomed_ct_code</option><option value="radiology">Radiology — columns: code, loinc_code, snomed_ct_code</option><option value="drug">Drugs — columns: id or name, hpt_code, atc_code</option></select>
+  <input type="file" name="file" accept=".csv" required><button class="bg-slate-900 text-white rounded px-3 py-1.5">Import mapping</button></form>
+<p class="text-sm mt-4">HPT registry: {% if hpt_url %}connected ({{ hpt_count }} products cached){% else %}not connected — set HPT_REGISTRY_URL{% endif %}. Search: <input id="q" class="border rounded px-2 py-1" placeholder="drug name"> <span id="res" class="text-xs text-slate-600"></span></p>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById('q').addEventListener('input', async (e) => {
+  if (e.target.value.length < 2) return;
+  const r = await (await fetch("{{ url_for('terminology.hpt_search') }}?q=" + encodeURIComponent(e.target.value))).json();
+  document.getElementById('res').textContent = (r.results || []).map(x => x.name + ' [' + x.hpt_code + ']').slice(0, 5).join(' · ') || (r.error || 'no matches');
+});
+</script>{% endblock %}

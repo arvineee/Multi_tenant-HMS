@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Clinical record — {{ patient.full_name }}{% endblock %}
+{% macro field(name, label, type='text', extra='') %}<input type="{{ type }}" name="{{ name }}" placeholder="{{ label }}" title="{{ label }}" class="border rounded px-2 py-1 text-sm w-full" {{ extra|safe }}>{% endmacro %}
+{% block content %}
+<div class="flex justify-between items-start mb-3">
+  <div><h1 class="text-2xl font-bold">{{ patient.full_name }} <span class="text-base font-normal text-slate-500">{{ patient.patient_number }} · {{ patient.gender }} · {{ patient.age }} yrs</span></h1>
+  <p class="text-sm">
+    {% if patient.allergy_status == 'Has allergies' %}<span class="bg-red-100 text-red-800 rounded px-2 py-0.5">Allergies: {{ patient.allergies }}</span>
+    {% elif patient.allergy_status == 'No known allergies' %}<span class="bg-emerald-100 text-emerald-800 rounded px-2 py-0.5">No known allergies</span>
+    {% else %}<span class="bg-amber-100 text-amber-800 rounded px-2 py-0.5">Allergy status not recorded</span>{% endif %}</p></div>
+  <div class="flex gap-3 text-sm"><a class="underline" href="{{ url_for('patients.patient_detail', patient_id=patient.id) }}">Visit page</a><a class="underline" href="{{ url_for('summary.view', patient_id=patient.id) }}">Clinical summary</a></div>
+</div>
+
+<div class="grid xl:grid-cols-2 gap-4">
+<!-- PROBLEMS -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Problem list</h2>
+<table class="w-full text-sm">{% for p in problems %}<tr class="border-t align-top"><td class="py-1">{{ p.description }}{% if p.code_display %} <span class="text-xs text-slate-500">[{{ p.code_display }}]</span>{% endif %}{% if p.is_chronic %} <span class="text-xs bg-slate-100 rounded px-1">chronic</span>{% endif %}<br><span class="text-xs text-slate-500">{{ p.status }}{% if p.onset_date %} · since {{ p.onset_date }}{% endif %}{% if p.resolved_date %} · resolved {{ p.resolved_date }}{% endif %} · {{ p.source }}</span></td>
+<td class="text-right">{% if can_edit %}<select onchange="setProblem({{ p.id }}, this.value, '{{ p.status }}')" class="border rounded text-xs">{% for s in problem_statuses %}<option {{ 'selected' if s == p.status }}>{{ s }}</option>{% endfor %}</select>{% endif %}</td></tr>{% else %}<tr><td class="text-slate-500 py-2">No problems recorded. Diagnoses are added automatically when a consultation is finalised.</td></tr>{% endfor %}</table>
+{% if can_edit %}<form data-post="{{ url_for('records.add_problem', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2">{{ field('description','Problem / diagnosis') }}{{ field('onset_date','Onset','date') }}<label class="text-xs"><input type="checkbox" name="is_chronic"> Chronic</label><button class="bg-slate-900 text-white rounded px-3 py-1 text-sm">Add problem</button></form>{% endif %}</section>
+
+<!-- ALLERGIES -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Allergies</h2>
+<table class="w-full text-sm">{% for a in allergies %}<tr class="border-t"><td class="py-1"><b>{{ a.allergen_name }}</b> <span class="text-xs">({{ a.allergen_type }}, {{ a.severity }})</span>{% if a.reaction %} — {{ a.reaction }}{% endif %}<br><span class="text-xs text-slate-500">{{ a.status }}{% if a.hpt_code %} · HPT {{ a.hpt_code }}{% endif %}</span></td>
+<td class="text-right">{% if can_edit and a.status == 'Active' %}<button class="text-xs underline text-red-600" onclick="deactivateAllergy({{ a.id }})">Deactivate</button>{% endif %}</td></tr>{% else %}<tr><td class="text-slate-500 py-2">None recorded.</td></tr>{% endfor %}</table>
+{% if can_edit %}
+<form data-post="{{ url_for('records.add_allergy', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2">{{ field('allergen_name','Allergen') }}
+<select name="allergen_type" class="border rounded px-2 py-1 text-sm">{% for t in allergen_types %}<option>{{ t }}</option>{% endfor %}</select>{{ field('reaction','Reaction') }}
+<select name="severity" class="border rounded px-2 py-1 text-sm">{% for t in severities %}<option {{ 'selected' if t == 'Moderate' }}>{{ t }}</option>{% endfor %}</select><button class="bg-slate-900 text-white rounded px-3 py-1 text-sm col-span-2">Add allergy</button></form>
+<div class="mt-2 text-xs">Status: <select onchange="postJSON('{{ url_for('records.set_allergy_status', patient_id=patient.id) }}', {status: this.value}).then(r => r.success ? location.reload() : showToast(r.error, true))" class="border rounded">{% for o in allergy_status_options %}<option {{ 'selected' if o == patient.allergy_status }}>{{ o }}</option>{% endfor %}</select></div>{% endif %}</section>
+
+<!-- MEDICATIONS -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Medication list & history</h2>
+<table class="w-full text-sm">{% for m in medications %}<tr class="border-t"><td class="py-1"><b>{{ m.display_name }}</b> {{ m.dosage or '' }} {{ m.frequency or '' }}<br><span class="text-xs text-slate-500">{{ m.effective_status }} · {{ m.source }}{% if m.start_date %} · from {{ m.start_date }}{% endif %}{% if m.end_date %} to {{ m.end_date }}{% endif %}{% if m.stop_reason %} · {{ m.stop_reason }}{% endif %}</span></td>
+<td class="text-right">{% if can_edit and m.effective_status == 'Active' %}<button class="text-xs underline" onclick="stopMed({{ m.id }})">Stop</button>{% endif %}</td></tr>{% else %}<tr><td class="text-slate-500 py-2">None. Prescriptions written here appear automatically.</td></tr>{% endfor %}</table>
+{% if can_edit %}<form data-post="{{ url_for('records.add_medication', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2">{{ field('medication_name','Medicine (taken elsewhere / OTC)') }}{{ field('dosage','Dose') }}{{ field('frequency','Frequency') }}{{ field('indication','Reason') }}<button class="bg-slate-900 text-white rounded px-3 py-1 text-sm col-span-2">Add to list</button></form>{% endif %}</section>
+
+<!-- FAMILY HISTORY -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Family history</h2>
+<ul class="text-sm">{% for f in family %}<li class="border-t py-1">{{ f.relationship_to_patient }}: {{ f.condition }}{% if f.age_at_onset %} (age {{ f.age_at_onset }}){% endif %}{% if f.deceased %} — deceased{% endif %}</li>{% else %}<li class="text-slate-500">None recorded.</li>{% endfor %}</ul>
+{% if can_edit %}<form data-post="{{ url_for('records.add_family_history', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2"><select name="relationship_to_patient" class="border rounded px-2 py-1 text-sm">{% for r in relations %}<option>{{ r }}</option>{% endfor %}</select>{{ field('condition','Condition') }}{{ field('age_at_onset','Age at onset','number','min=0 max=120') }}<label class="text-xs"><input type="checkbox" name="deceased"> Deceased</label><button class="bg-slate-900 text-white rounded px-3 py-1 text-sm col-span-2">Add</button></form>{% endif %}</section>
+
+<!-- GROWTH -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">BMI & growth</h2>
+{% if not reference_loaded %}<p class="text-xs text-amber-700 mb-1">WHO reference tables are not loaded, so z-scores are blank (BMI still works).</p>{% endif %}
+<table class="w-full text-xs"><thead><tr class="text-left text-slate-500"><th>Date</th><th>Wt</th><th>Ht</th><th>BMI</th><th>HC</th><th>MUAC</th><th>z (W/H/BMI)</th></tr></thead>{% for g in growth|reverse %}<tr class="border-t"><td>{{ g.measured_on }}</td><td>{{ g.weight_kg or '' }}</td><td>{{ g.height_cm or '' }}</td><td>{{ g.bmi or '' }}</td><td>{{ g.head_circumference_cm or '' }}</td><td>{{ g.muac_cm or '' }}{% set mc = muac_class(g.muac_cm, (g.age_days or 0) // 30) %}{% if mc %}<br><span class="text-red-700">{{ mc }}</span>{% endif %}</td>
+<td>{{ g.waz if g.waz is not none else '–' }} / {{ g.haz if g.haz is not none else '–' }} / {{ g.baz if g.baz is not none else '–' }}{% if g.waz is not none %}<br>{{ classify('wfa', g.waz) }}{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="text-slate-500 py-2">No measurements yet. Triage vitals are added automatically.</td></tr>{% endfor %}</table>
+<div id="chart" class="mt-2"></div>
+{% if can_edit %}<form data-post="{{ url_for('records.add_growth', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-4 gap-2">{{ field('weight_kg','Weight kg','number','step=0.01') }}{{ field('height_cm','Height cm','number','step=0.1') }}{{ field('head_circumference_cm','Head cm','number','step=0.1') }}{{ field('muac_cm','MUAC cm','number','step=0.1') }}{{ field('measured_on','Date','date','max='~today) }}<button class="bg-slate-900 text-white rounded px-3 py-1 text-sm col-span-3">Add measurement</button></form>{% endif %}</section>
+
+<!-- ALLIED HEALTH -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Allied health referrals</h2>
+{% for r in referrals %}{% set hidden = r.is_confidential and not (can_allied or r.referred_by_id == current_user.id) %}
+<div class="border-t py-2 text-sm">{% if hidden %}<span class="text-slate-500">{{ r.discipline }} — confidential</span>{% else %}
+<b>{{ r.discipline }}</b> <span class="text-xs">{{ r.priority }} · {{ r.status }}</span><br>{{ r.reason }}
+{% for s in r.sessions %}<div class="ml-3 text-xs text-slate-600 mt-1">{{ s.session_date }} — {{ s.assessment or s.subjective or s.objective or s.plan }}</div>{% endfor %}
+{% if can_allied and r.status not in ['Completed','Cancelled'] %}
+<form data-post="{{ url_for('records.add_session', ref_id=r.id) }}" data-reload class="mt-1 grid grid-cols-2 gap-1"><textarea name="subjective" placeholder="Subjective" rows="1" class="border rounded px-2 py-1 text-xs"></textarea><textarea name="objective" placeholder="Objective" rows="1" class="border rounded px-2 py-1 text-xs"></textarea><textarea name="assessment" placeholder="Assessment" rows="1" class="border rounded px-2 py-1 text-xs"></textarea><textarea name="plan" placeholder="Plan" rows="1" class="border rounded px-2 py-1 text-xs"></textarea><button class="bg-slate-800 text-white rounded text-xs px-2 py-1 col-span-2">Add session note</button></form>
+<button class="underline text-xs mt-1" data-action="{{ url_for('records.referral_status', ref_id=r.id) }}" data-body='{"status":"Completed"}' data-reload>Mark completed</button>{% endif %}{% endif %}</div>
+{% else %}<p class="text-slate-500 text-sm">None.</p>{% endfor %}
+{% if can_refer %}<form data-post="{{ url_for('records.add_referral', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2"><select name="discipline" class="border rounded px-2 py-1 text-sm">{% for d in disciplines %}<option>{{ d }}</option>{% endfor %}</select><select name="priority" class="border rounded px-2 py-1 text-sm"><option>Routine</option><option>Urgent</option></select>{{ field('reason','Reason for referral') }}{{ field('fee','Fee per session (optional)','number','min=0 step=1') }}<button class="bg-slate-900 text-white rounded px-3 py-1 text-sm col-span-2">Refer</button></form>{% endif %}</section>
+
+<!-- MCH -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Maternal & child health</h2>
+{% for e, d in mch %}<div class="border-t py-1 text-sm"><b>{{ e.encounter_type }}</b> — {{ e.encounter_date }}{% if e.next_visit_date %} (next {{ e.next_visit_date }}){% endif %}<br><span class="text-xs text-slate-600">{% for k, v in d.items() %}{{ k|replace('_',' ') }}: {{ v }}; {% endfor %}</span></div>{% else %}<p class="text-slate-500 text-sm">None.</p>{% endfor %}
+{% if can_edit %}<form data-post="{{ url_for('records.add_mch', patient_id=patient.id) }}" data-reload class="mt-2 space-y-2"><div class="flex gap-2"><select name="encounter_type" id="mchType" class="border rounded px-2 py-1 text-sm">{% for t in mch_types %}<option>{{ t }}</option>{% endfor %}</select>{{ field('encounter_date','Date','date','max='~today) }}{{ field('next_visit_date','Next visit','date') }}</div><div id="mchFields" class="grid grid-cols-2 gap-2"></div>{{ field('notes','Notes') }}<button class="bg-slate-900 text-white rounded px-3 py-1 text-sm">Record encounter</button></form>{% endif %}</section>
+
+<!-- IMMUNIZATION -->
+<section class="bg-white rounded shadow p-4"><h2 class="font-semibold mb-2">Immunization</h2>
+{% if due_vaccines %}<p class="text-xs bg-amber-50 text-amber-900 rounded p-2 mb-2">Due or overdue by the routine schedule: {{ due_vaccines|join(', ') }}. (Confirm against the current MOH schedule.)</p>{% endif %}
+<ul class="text-sm">{% for i in immunizations %}<li class="border-t py-1">{{ i.vaccine }}{% if i.dose_number %} dose {{ i.dose_number }}{% endif %} — {{ i.date_given }}{% if i.batch_number %} · batch {{ i.batch_number }}{% endif %}{% if i.given_elsewhere %} · from card{% endif %}</li>{% else %}<li class="text-slate-500">None recorded.</li>{% endfor %}</ul>
+{% if can_edit %}<form data-post="{{ url_for('records.add_immunization', patient_id=patient.id) }}" data-reload class="mt-2 grid grid-cols-2 gap-2">{{ field('vaccine','Vaccine') }}{{ field('dose_number','Dose #','number','min=1') }}{{ field('date_given','Date given','date','required max='~today) }}{{ field('batch_number','Batch') }}<label class="text-xs"><input type="checkbox" name="given_elsewhere"> From card / other facility</label><button class="bg-slate-900 text-white rounded px-3 py-1 text-sm">Add</button></form>{% endif %}</section>
+</div>
+
+{% if history %}<section class="bg-white rounded shadow p-4 mt-4"><h2 class="font-semibold mb-2">Change history (latest {{ history|length }})</h2>
+<table class="w-full text-xs"><tbody>{% for h in history %}<tr class="border-t align-top"><td class="py-1 whitespace-nowrap">{{ h.changed_at.strftime('%d %b %H:%M') }}</td><td>{{ h.entity }} #{{ h.entity_id }} v{{ h.version_no }}</td><td>{{ h.action }}{% if h.is_amendment %} <b class="text-amber-700">amendment</b>{% endif %}</td><td>{{ h.changed_by.full_name if h.changed_by else '' }}</td><td class="text-slate-600">{{ h.amendment_reason or '' }}</td></tr>{% endfor %}</tbody></table></section>{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const MCH = {{ mch_schemas|tojson }};
+function renderMch() {
+  const t = document.getElementById('mchType'); if (!t) return;
+  const box = document.getElementById('mchFields'); box.innerHTML = '';
+  Object.entries(MCH[t.value]).forEach(([k, [label, kind, req]]) => {
+    let el;
+    if (kind.startsWith('choice:')) { el = document.createElement('select'); el.innerHTML = '<option value="">' + label + '…</option>' + kind.slice(7).split('/').map(o => '<option>' + o + '</option>').join(''); }
+    else if (kind === 'bool') { el = document.createElement('label'); el.className = 'text-xs'; el.innerHTML = '<input type="checkbox" name="' + k + '"> ' + label; box.appendChild(el); return; }
+    else { el = document.createElement('input'); el.type = kind === 'number' ? 'number' : kind === 'date' ? 'date' : 'text'; if (kind === 'number') el.step = 'any'; el.placeholder = label + (req ? ' *' : ''); el.title = label; }
+    el.name = k; el.className = 'border rounded px-2 py-1 text-sm w-full'; box.appendChild(el);
+  });
+}
+document.getElementById('mchType')?.addEventListener('change', renderMch); renderMch();
+
+async function setProblem(id, status, old) {
+  let reason = '';
+  if (['Resolved', 'Ruled Out'].includes(old) && status !== old) { reason = prompt('Reason for changing a closed problem?') || ''; if (!reason) return location.reload(); }
+  const r = await postJSON('/problems/' + id, {status: status, amendment_reason: reason});
+  r.success ? location.reload() : (showToast(r.error, true), setTimeout(() => location.reload(), 1200));
+}
+async function deactivateAllergy(id) {
+  const reason = prompt('Why is this allergy being deactivated?'); if (!reason) return;
+  const r = await postJSON('/allergies/' + id, {status: 'Inactive', amendment_reason: reason});
+  r.success ? location.reload() : showToast(r.error, true);
+}
+async function stopMed(id) {
+  const reason = prompt('Why is this medicine stopped?'); if (!reason) return;
+  const r = await postJSON('/medications/' + id, {status: 'Stopped', stop_reason: reason});
+  r.success ? location.reload() : showToast(r.error, true);
+}
+(async function drawGrowth() {
+  const r = await (await fetch("{{ url_for('records.growth_json', patient_id=patient.id) }}")).json();
+  const pts = (r.points || []).filter(p => p.weight_kg); if (pts.length < 2) return;
+  const W = 300, H = 90, xs = pts.map((p, i) => i), ys = pts.map(p => p.weight_kg);
+  const lo = Math.min(...ys), hi = Math.max(...ys), sp = (hi - lo) || 1;
+  const d = pts.map((p, i) => (10 + i * (W - 20) / (pts.length - 1)) + ',' + (H - 10 - (p.weight_kg - lo) / sp * (H - 20))).join(' ');
+  document.getElementById('chart').innerHTML = '<p class="text-xs text-slate-500">Weight (kg): ' + lo + ' – ' + hi + '</p><svg width="' + W + '" height="' + H + '"><polyline fill="none" stroke="#0f172a" stroke-width="2" points="' + d + '"/></svg>';
+})();
+</script>
+{% endblock %}

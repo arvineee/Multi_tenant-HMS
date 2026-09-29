@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Decision support{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Clinical decision support</h1>
+<p class="text-sm text-slate-600 mb-4 max-w-3xl">Starter rules only. They must be reviewed by your clinical lead before go-live, and no drug-interaction database is included. Turning a rule off applies to your whole organization and is recorded in the audit log.</p>
+<ul class="bg-white rounded shadow text-sm max-w-2xl">{% for rid, label in catalog.items() %}<li class="flex justify-between border-t first:border-0 p-3"><span>{{ label }}</span>
+<button class="underline {{ 'text-slate-400' if rid in off else 'text-emerald-700' }}" data-action="{{ url_for('cds.settings') }}" data-body='{"rule_id":"{{ rid }}","enabled":"{{ '1' if rid in off else '' }}"}' data-reload>{{ 'Off — turn on' if rid in off else 'On — turn off' }}</button></li>{% endfor %}</ul>
+{% endblock %}

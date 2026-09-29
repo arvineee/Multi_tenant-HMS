@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Welcome, {{ current_user.full_name }}</h1>
+<p class="text-sm text-slate-500 mb-6">
+  {{ hospital.name if hospital else 'No hospital assigned' }} · {{ current_user.role.name }}
+</p>
+
+{% if stat %}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+  {% if current_user.has_permission('consultation.create') %}
+  <a href="{{ url_for('clinical.patient_queue') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">In Consultation Queue</p>
+    <p class="text-2xl font-bold">{{ stat.consultation_queue_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open queue &rarr;</p>
+  </a>
+  {% elif current_user.has_permission('triage.create') %}
+  <a href="{{ url_for('clinical.patient_queue') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">In Triage Queue</p>
+    <p class="text-2xl font-bold">{{ stat.triage_queue_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open queue &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('patient.register') %}
+  <a href="{{ url_for('patients.list_patients') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Visits Today</p>
+    <p class="text-2xl font-bold">{{ stat.visits_today }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Go to Patients &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('lab.result') %}
+  <a href="{{ url_for('clinical.lab_worklist') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Pending Lab Orders</p>
+    <p class="text-2xl font-bold {{ 'text-amber-600' if stat.pending_lab_count > 0 else '' }}">{{ stat.pending_lab_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open worklist &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('radiology.report') %}
+  <a href="{{ url_for('clinical.radiology_worklist') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Pending Radiology</p>
+    <p class="text-2xl font-bold {{ 'text-amber-600' if stat.pending_radiology_count > 0 else '' }}">{{ stat.pending_radiology_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open worklist &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('pharmacy.dispense') %}
+  <a href="{{ url_for('pharmacy.worklist') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Pending Prescriptions</p>
+    <p class="text-2xl font-bold {{ 'text-amber-600' if stat.pending_prescriptions_count > 0 else '' }}">{{ stat.pending_prescriptions_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open worklist &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('pharmacy.stock') %}
+  <a href="{{ url_for('pharmacy.stock_overview') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Low Stock Drugs</p>
+    <p class="text-2xl font-bold {{ 'text-red-600' if stat.low_stock_count > 0 else '' }}">{{ stat.low_stock_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open stock &rarr;</p>
+  </a>
+  {% endif %}
+
+  {% if current_user.has_permission('billing.manage') %}
+  <a href="{{ url_for('billing.worklist') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Unpaid Bills</p>
+    <p class="text-2xl font-bold {{ 'text-amber-600' if stat.pending_bills_count > 0 else '' }}">{{ stat.pending_bills_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open billing &rarr;</p>
+  </a>
+  <a href="{{ url_for('billing.worklist') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Awaiting Billing</p>
+    <p class="text-2xl font-bold {{ 'text-red-600' if stat.unbilled_visits_count > 0 else '' }}">{{ stat.unbilled_visits_count }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Visits with no bill yet &rarr;</p>
+  </a>
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Outstanding Balance</p>
+    <p class="text-2xl font-bold {{ 'text-red-600' if stat.outstanding_balance > 0 else '' }}">KES {{ '{:,.0f}'.format(stat.outstanding_balance) }}</p>
+  </div>
+  {% endif %}
+
+  {% if current_user.has_permission('triage.create') or current_user.has_permission('consultation.create') %}
+  {% if stat.total_beds %}
+  <a href="{{ url_for('inpatient.ward_census') }}" class="bg-white rounded-lg shadow p-4 hover:shadow-md transition">
+    <p class="text-xs text-slate-500">Bed Occupancy</p>
+    <p class="text-2xl font-bold">{{ stat.occupied_beds }}/{{ stat.total_beds }}</p>
+    <p class="text-xs text-emerald-700 mt-1">Open ward census &rarr;</p>
+  </a>
+  {% endif %}
+  {% endif %}
+
+  {% if current_user.has_permission('users.manage') or current_user.has_permission('catalogs.manage') %}
+  <div class="bg-white rounded-lg shadow p-4">
+    <p class="text-xs text-slate-500">Active Staff</p>
+    <p class="text-2xl font-bold">{{ stat.staff_count }}</p>
+  </div>
+  {% endif %}
+
+</div>
+{% else %}
+<div class="bg-white rounded-lg shadow p-6">
+  <p class="text-sm text-slate-600">Your account isn't tied to a hospital yet — contact your administrator.</p>
+</div>
+{% endif %}
+{% endblock %}

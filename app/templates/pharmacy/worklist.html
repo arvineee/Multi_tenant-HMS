@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Pharmacy Worklist{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Pharmacy Worklist</h1>
+<p class="text-sm text-slate-500 mb-6">Pending prescription items across your hospital. Dispensing draws from the earliest-expiring batch first.</p>
+
+<div class="space-y-3">
+  {% for item in items %}
+  {% set stock = stock_levels.get(item.id, 0) %}
+  {% set patient = item.prescription.patient %}
+  {% set history = prior_history.get(patient.id, []) %}
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <p class="font-medium">{{ item.drug.name }} {{ item.dosage or '' }}</p>
+        <p class="text-xs text-slate-500">
+          <a href="{{ url_for('patients.patient_detail', patient_id=item.prescription.patient_id) }}" class="text-emerald-700 hover:underline">{{ item.prescription.patient.full_name }}</a>
+          · {{ item.frequency or '' }} {% if item.duration %}· {{ item.duration }}{% endif %}
+          · Prescribed by {{ item.prescription.doctor.full_name }}
+        </p>
+        {% if item.instructions %}<p class="text-xs text-slate-500 mt-1">{{ item.instructions }}</p>{% endif %}
+        {% if patient.allergies %}
+        <p class="text-xs text-red-700 font-semibold mt-1">⚠ Allergies: {{ patient.allergies }}</p>
+        {% endif %}
+        {% if history %}
+        <p class="text-xs text-slate-400 mt-1">Previously given: {{ history|map(attribute='name')|join(', ') }}</p>
+        {% endif %}
+      </div>
+      <div class="text-right">
+        <span class="text-xs px-2 py-1 rounded {{ 'bg-amber-100 text-amber-700' if item.status == 'Pending' else 'bg-blue-100 text-blue-700' }}">
+          {{ item.status }}
+        </span>
+        <p class="text-xs text-slate-400 mt-1">
+          {{ item.quantity_remaining }} of {{ item.quantity_prescribed }} remaining
+        </p>
+        <p class="text-xs {{ 'text-red-600 font-semibold' if stock < item.quantity_remaining else 'text-slate-400' }}">
+          {{ stock }} in stock
+        </p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="document.getElementById('dispense-modal-{{ item.id }}').classList.remove('hidden')"
+              class="text-xs px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+        Dispense
+      </button>
+      <button onclick="cancelItem({{ item.id }})" class="text-xs px-3 py-1.5 rounded border border-red-300 text-red-700 hover:bg-red-50">
+        Cancel Item
+      </button>
+    </div>
+  </div>
+
+  <div id="dispense-modal-{{ item.id }}" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-40 p-4">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
+      <h2 class="font-bold text-lg mb-1">{{ item.drug.name }} <span class="text-sm font-normal text-slate-500">{{ item.dosage or '' }}</span></h2>
+      <p class="text-xs text-slate-500 mb-1">{{ item.prescription.patient.full_name }} — {{ stock }} in stock, {{ item.quantity_remaining }} remaining on prescription</p>
+      {% if patient.allergies %}<p class="text-xs text-red-700 font-semibold mb-1">⚠ Allergies: {{ patient.allergies }}</p>{% endif %}
+      {% if history %}<p class="text-xs text-slate-400 mb-3">Previously given: {{ history|map(attribute='name')|join(', ') }}</p>{% else %}<div class="mb-3"></div>{% endif %}
+
+      <form onsubmit="submitDispense(event, {{ item.id }})" class="space-y-3">
+        <label class="block text-xs font-medium text-slate-600">Quantity to dispense</label>
+        <input name="quantity" type="number" min="1" max="{{ [stock, item.quantity_remaining] | min }}" value="{{ [stock, item.quantity_remaining] | min }}" required
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+
+        <div class="border-t pt-3">
+          <label class="flex items-center gap-2 text-xs font-medium text-slate-600 mb-2">
+            <input type="checkbox" onchange="document.getElementById('sub-fields-{{ item.id }}').classList.toggle('hidden', !this.checked)">
+            Give a different drug or dosage instead
+          </label>
+          <div id="sub-fields-{{ item.id }}" class="hidden space-y-2">
+            <div class="relative">
+              <input type="text" id="sub-drug-input-{{ item.id }}" placeholder="Search alternative drug..." autocomplete="off"
+                     oninput="searchSubDrug({{ item.id }})" onblur="setTimeout(() => document.getElementById('sub-drug-results-{{ item.id }}').classList.add('hidden'), 200)"
+                     class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+              <input type="hidden" name="substitute_drug_id" id="sub-drug-id-{{ item.id }}">
+              <div id="sub-drug-results-{{ item.id }}" class="hidden absolute z-10 bg-white border border-slate-200 rounded shadow-lg mt-1 w-full max-h-32 overflow-y-auto"></div>
+            </div>
+            <input name="dispensed_dosage" placeholder="Adjusted dosage (leave blank to keep '{{ item.dosage or '' }}')" class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+            <input name="substitution_reason" placeholder="Reason (allergy, side effect, tried before, out of stock...)" class="w-full border border-slate-300 rounded px-2 py-1.5 text-sm">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="document.getElementById('dispense-modal-{{ item.id }}').classList.add('hidden')"
+                  class="px-4 py-2 text-sm rounded border border-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">Dispense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <p class="text-slate-400 text-center py-8">No pending prescriptions.</p>
+  {% endfor %}
+</div>
+
+<script>
+let subSearchTimers = {};
+function searchSubDrug(itemId) {
+  clearTimeout(subSearchTimers[itemId]);
+  subSearchTimers[itemId] = setTimeout(async () => {
+    const input = document.getElementById(`sub-drug-input-${itemId}`);
+    const resultsBox = document.getElementById(`sub-drug-results-${itemId}`);
+    const hiddenId = document.getElementById(`sub-drug-id-${itemId}`);
+    const q = input.value.trim();
+    hiddenId.value = '';
+    if (q.length < 2) { resultsBox.classList.add('hidden'); return; }
+    const res = await fetch(`/api/drug-search?q=${encodeURIComponent(q)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    resultsBox.innerHTML = '';
+    (data.results || []).forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'px-3 py-2 text-xs hover:bg-emerald-50 cursor-pointer';
+      row.textContent = `${r.name} ${r.strength || ''} (${r.form || ''})`;
+      row.addEventListener('mousedown', () => {
+        input.value = `${r.name} ${r.strength || ''}`.trim();
+        hiddenId.value = r.id;
+        resultsBox.classList.add('hidden');
+      });
+      resultsBox.appendChild(row);
+    });
+    resultsBox.classList.remove('hidden');
+  }, 250);
+}
+
+async function submitDispense(e, itemId) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const data = await postJSON(`/prescription-items/${itemId}/dispense`, Object.fromEntries(form.entries()));
+  if (data.success) {
+    showToast('Dispensed.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not dispense.', true);
+  }
+}
+
+async function cancelItem(itemId) {
+  if (!confirm('Cancel this prescription item?')) return;
+  const data = await postJSON(`/prescription-items/${itemId}/cancel`, {});
+  if (data.success) {
+    showToast('Item cancelled.');
+    window.location.reload();
+  } else {
+    showToast(data.error || 'Could not cancel.', true);
+  }
+}
+</script>
+{% endblock %}

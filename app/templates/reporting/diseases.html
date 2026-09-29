@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Notifiable diseases{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Notifiable disease list</h1>
+<p class="text-sm text-slate-600 mb-4 max-w-3xl">This is a <b>starter list</b> based on Kenya's IDSR priority diseases. Confirm it against the current MOH circular before relying on it. <b>Immediate</b> diseases raise a notification for every case; <b>weekly</b> diseases are counted in the weekly report. Matching uses ICD-10 code prefixes.</p>
+<table class="bg-white rounded shadow text-sm w-full"><thead><tr class="text-left text-slate-500"><th class="p-2">Code</th><th>Name</th><th>Type</th><th>ICD-10 prefixes</th><th>Form</th><th>Active</th></tr></thead><tbody>
+{% for d in diseases %}<tr class="border-t"><td class="p-2">{{ d.code }}</td><td>{{ d.name }}</td><td>{{ d.category }}</td><td>{{ d.icd10_prefixes }}</td><td>{{ d.moh_form }}</td>
+<td><button class="underline text-xs {{ 'text-emerald-700' if d.is_active else 'text-slate-400' }}" data-action="{{ url_for('reporting.diseases') }}" data-body='{"action":"toggle","id":{{ d.id }}}' data-reload>{{ 'On' if d.is_active else 'Off' }}</button></td></tr>{% endfor %}</tbody></table>
+<form data-post="{{ url_for('reporting.diseases') }}" data-reload class="bg-white rounded shadow p-4 mt-4 grid grid-cols-2 gap-2 text-sm max-w-2xl">
+  <input type="hidden" name="action" value="save"><p class="col-span-2 font-semibold">Add or change a disease</p>
+  <input name="code" placeholder="CODE" required class="border rounded px-2 py-1"><input name="name" placeholder="Name" required class="border rounded px-2 py-1">
+  <select name="category" class="border rounded px-2 py-1"><option value="immediate">Immediate</option><option value="weekly">Weekly</option></select>
+  <input name="moh_form" placeholder="MOH form" class="border rounded px-2 py-1"><input name="icd10_prefixes" placeholder="ICD-10 prefixes, comma separated" required class="border rounded px-2 py-1 col-span-2">
+  <button class="bg-slate-900 text-white rounded px-3 py-1.5 col-span-2">Save</button></form>
+{% endblock %}

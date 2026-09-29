@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Two-step verification{% endblock %}
+{% block guest_content %}
+<div class="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+  <div class="bg-white rounded-lg shadow p-8 w-full max-w-sm">
+    <h1 class="text-xl font-bold mb-1">Two-step verification</h1>
+    <p class="text-sm text-slate-600 mb-4">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+    <p id="err" class="hidden text-sm text-red-600 mb-2"></p>
+    <input id="code" autocomplete="one-time-code" inputmode="text" autofocus class="w-full border border-slate-300 rounded px-3 py-2 text-lg tracking-widest text-center" placeholder="123456">
+    <button id="go" class="w-full mt-4 bg-slate-900 text-white rounded py-2">Verify</button>
+    <a href="{{ url_for('auth.login') }}" class="block text-center text-xs text-slate-500 mt-4">Back to sign in</a>
+  </div>
+</div>
+<script>
+async function verify() {
+  const res = await fetch("{{ url_for('security.mfa_verify') }}", {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code: document.getElementById('code').value})});
+  const r = await res.json();
+  if (r.success) { window.location = r.redirect; return; }
+  const e = document.getElementById('err'); e.textContent = r.error || 'Not valid.'; e.classList.remove('hidden');
+  if (res.status === 429) setTimeout(() => window.location = "{{ url_for('auth.login') }}", 2500);
+}
+document.getElementById('go').onclick = verify;
+document.getElementById('code').addEventListener('keydown', e => { if (e.key === 'Enter') verify(); });
+</script>
+{% endblock %}

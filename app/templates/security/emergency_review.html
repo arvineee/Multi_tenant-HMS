@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Emergency access review{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Emergency access review</h1>
+<table class="bg-white rounded shadow text-sm w-full"><thead><tr class="text-left text-slate-500"><th class="p-2">When</th><th>Staff</th><th>Patient</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>
+{% for g in grants %}<tr class="border-t align-top"><td class="p-2 whitespace-nowrap">{{ g.granted_at.strftime('%d %b %Y %H:%M') }}</td><td>{{ g.user.full_name }}</td><td>{{ g.patient.patient_number }}</td><td class="max-w-md">{{ g.reason }}</td>
+<td>{{ g.review_outcome }}{% if g.reviewed_by %}<br><span class="text-xs text-slate-500">by {{ g.reviewed_by.full_name }}</span>{% endif %}</td>
+<td>{% if g.review_outcome == 'Pending' %}
+<form data-post="{{ url_for('security.emergency_review') }}" data-reload class="flex gap-1"><input type="hidden" name="id" value="{{ g.id }}">
+<input type="hidden" name="outcome" value="Justified"><input name="notes" placeholder="Note" class="border rounded px-2 py-1 text-xs w-28">
+<button class="bg-emerald-600 text-white rounded px-2 text-xs">Justified</button></form>
+<form data-post="{{ url_for('security.emergency_review') }}" data-reload class="mt-1"><input type="hidden" name="id" value="{{ g.id }}"><input type="hidden" name="outcome" value="Not justified"><button class="bg-red-600 text-white rounded px-2 text-xs py-1">Not justified</button></form>
+{% endif %}</td></tr>{% else %}<tr><td class="p-4 text-slate-500" colspan="6">No emergency access has been used.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

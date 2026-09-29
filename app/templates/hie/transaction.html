@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-2">HIE message #{{ tx.id }} — {{ tx.status }}</h1>
+<p class="text-sm mb-2">{{ tx.resource_summary }} · attempts {{ tx.attempts }}{% if tx.http_status %} · HTTP {{ tx.http_status }}{% endif %}</p>
+{% if tx.response_excerpt %}<p class="text-sm text-slate-600 mb-2">{{ tx.response_excerpt }}</p>{% endif %}
+<pre class="bg-slate-900 text-slate-100 rounded p-3 text-xs overflow-auto max-h-[70vh]">{{ pretty }}</pre>
+{% endblock %}

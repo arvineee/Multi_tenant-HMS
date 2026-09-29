@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prescription — {{ prescription.patient.full_name }}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0 !important; }
+  }
+</style>
+</head>
+<body class="bg-slate-100 py-8 px-4">
+
+<div class="no-print max-w-3xl mx-auto mb-4 flex justify-between items-center">
+  <a href="javascript:history.back()" class="text-sm text-emerald-700 hover:underline">&larr; Back</a>
+  <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded">
+    Print / Save as PDF
+  </button>
+</div>
+
+<div class="bg-white max-w-3xl mx-auto p-10 shadow print:shadow-none" style="min-height: 29.7cm;">
+
+  <div class="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+    <div>
+      <h1 class="text-xl font-bold">{{ hospital.name }}</h1>
+      <p class="text-xs text-slate-500">{{ hospital.level }}{% if hospital.address %} · {{ hospital.address }}{% endif %}</p>
+      <p class="text-xs text-slate-500">
+        {% if hospital.phone %}Tel: {{ hospital.phone }}{% endif %}
+        {% if hospital.email %} · {{ hospital.email }}{% endif %}
+      </p>
+    </div>
+    <div class="text-right text-xs text-slate-500">
+      <p class="font-mono font-semibold">RX-{{ hospital.code }}-{{ prescription.id }}</p>
+      <p>{{ prescription.created_at.strftime('%d %B %Y') }}</p>
+    </div>
+  </div>
+
+  <h2 class="text-lg font-bold text-center uppercase tracking-wide mb-6">Prescription</h2>
+
+  <table class="text-sm mb-6 w-full">
+    <tr>
+      <td class="py-1 text-slate-500 w-40">Patient Name</td>
+      <td class="py-1 font-medium">{{ prescription.patient.full_name }}</td>
+      <td class="py-1 text-slate-500 w-32">Patient No.</td>
+      <td class="py-1 font-mono">{{ prescription.patient.patient_number }}</td>
+    </tr>
+    <tr>
+      <td class="py-1 text-slate-500">Age / Gender</td>
+      <td class="py-1">{{ prescription.patient.age if prescription.patient.age is not none else '-' }} / {{ prescription.patient.gender or '-' }}</td>
+      <td class="py-1 text-slate-500">Weight</td>
+      <td class="py-1">{{ prescription.visit.triage.weight_kg ~ ' kg' if prescription.visit.triage and prescription.visit.triage.weight_kg else '-' }}</td>
+    </tr>
+  </table>
+
+  {% if prescription.patient.allergies %}
+  <div class="bg-red-50 border border-red-200 text-red-800 text-xs rounded px-3 py-2 mb-4">
+    <span class="font-semibold">⚠ Allergies:</span> {{ prescription.patient.allergies }}
+  </div>
+  {% endif %}
+
+  <table class="w-full text-sm mb-6">
+    <thead class="text-left text-slate-400 text-xs border-b border-slate-200">
+      <tr>
+        <th class="pb-2">Drug</th>
+        <th class="pb-2">Dosage</th>
+        <th class="pb-2">Frequency</th>
+        <th class="pb-2">Duration</th>
+        <th class="pb-2 text-right">Qty</th>
+        <th class="pb-2">Instructions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for item in prescription.items %}
+      <tr>
+        <td class="py-2 font-medium">{{ item.drug.name }}</td>
+        <td class="py-2">{{ item.dosage or '-' }}</td>
+        <td class="py-2">{{ item.frequency or '-' }}</td>
+        <td class="py-2">{{ item.duration or '-' }}</td>
+        <td class="py-2 text-right">{{ item.quantity_prescribed }}</td>
+        <td class="py-2 text-xs">{{ item.instructions or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="mt-16 pt-6 border-t border-slate-200 flex justify-between items-end">
+    <div>
+      <p class="text-sm font-semibold">{{ prescription.doctor.full_name }}</p>
+      <p class="text-xs text-slate-500">{{ prescription.doctor.role.name }}</p>
+      <p class="text-xs text-slate-400 mt-4">Signature: _______________________</p>
+    </div>
+    <div class="text-right text-xs text-slate-400">
+      <p>Official Stamp</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

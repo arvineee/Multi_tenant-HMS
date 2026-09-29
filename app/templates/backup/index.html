@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Backups & recovery{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-3">Backups &amp; disaster recovery</h1>
+{% if derived_key %}<p class="bg-amber-50 border border-amber-300 text-amber-900 rounded px-4 py-3 text-sm mb-3">Backups are encrypted with a key derived from SECRET_KEY. Set DATA_ENCRYPTION_KEYS and store a copy of the keys <b>away from the backups</b> — without the key a backup cannot be restored.</p>{% endif %}
+{% if not offsite %}<p class="bg-red-50 border border-red-300 text-red-800 rounded px-4 py-3 text-sm mb-3">No off-site copy is configured (BACKUP_OFFSITE_DIR or BACKUP_S3_BUCKET). A backup on the same server is not a disaster-recovery backup.</p>{% endif %}
+<div class="flex items-center gap-3 mb-4"><button class="bg-slate-900 text-white rounded px-4 py-2 text-sm" data-action="{{ url_for('backup.run') }}" data-reload data-reload-always data-done="Backup completed and verified">Run backup now</button>
+<span class="text-sm text-slate-600">Kept for {{ keep_days }} days · last verified: {{ info.last_ok.verify_status if info.last_ok else 'never' }}</span></div>
+<table class="bg-white rounded shadow text-sm w-full mb-6"><thead><tr class="text-left text-slate-500"><th class="p-2">Started</th><th>Trigger</th><th>Status</th><th>Size</th><th>Off-site</th><th>Restore test</th></tr></thead><tbody>
+{% for r in runs %}<tr class="border-t"><td class="p-2">{{ r.started_at.strftime('%d %b %H:%M') }}</td><td>{{ r.trigger }}</td><td class="{{ 'text-emerald-700' if r.status == 'OK' else 'text-red-700' }}">{{ r.status }}</td><td>{{ ((r.size_bytes or 0) / 1048576)|round(2) }} MB</td><td>{{ r.offsite_status or '' }}</td><td>{{ r.verify_status or r.error or '' }}</td></tr>{% endfor %}</tbody></table>
+<form data-post="{{ url_for('backup.save_plan') }}" data-reload class="bg-white rounded shadow p-4 text-sm grid md:grid-cols-2 gap-2 max-w-3xl"><p class="font-semibold md:col-span-2">Disaster recovery plan</p>
+  <label>Backup frequency<select name="backup_frequency" class="border rounded px-2 py-1 w-full">{% for f in ['Hourly','Daily','Weekly'] %}<option {{ 'selected' if plan.backup_frequency == f }}>{{ f }}</option>{% endfor %}</select></label>
+  <label>Where the written plan is kept<input name="plan_reference" value="{{ plan.plan_reference or '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <label>RTO (hours to be running again)<input type="number" step="0.5" min="0" name="rto_hours" value="{{ plan.rto_hours if plan.rto_hours is not none else '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <label>RPO (hours of data you can afford to lose)<input type="number" step="0.5" min="0" name="rpo_hours" value="{{ plan.rpo_hours if plan.rpo_hours is not none else '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <label>Last full recovery drill<input type="date" name="last_test_date" value="{{ plan.last_test_date or '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <label>Drill result<input name="last_test_result" value="{{ plan.last_test_result or '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <label>Tested by<input name="tested_by" value="{{ plan.tested_by or '' }}" class="border rounded px-2 py-1 w-full"></label>
+  <button class="bg-slate-900 text-white rounded px-3 py-1.5 md:col-span-2 w-fit">Save plan</button></form>
+{% endblock %}

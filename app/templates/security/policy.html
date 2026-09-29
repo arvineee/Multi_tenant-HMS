@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Security policy{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Security policy</h1>
+<form data-post="{{ url_for('security.policy') }}" data-reload class="bg-white rounded shadow p-4 mb-6 max-w-xl space-y-2">
+  <p class="font-semibold">Who must use two-step login?</p>
+  <label class="block text-sm"><input type="radio" name="mfa_policy" value="privileged" {{ 'checked' if policy == 'privileged' }}> Privileged roles only ({{ privileged_roles|join(', ') }})</label>
+  <label class="block text-sm"><input type="radio" name="mfa_policy" value="all" {{ 'checked' if policy == 'all' }}> Every staff member</label>
+  <button class="bg-slate-900 text-white rounded px-4 py-2 text-sm">Save</button>
+</form>
+<table class="bg-white rounded shadow text-sm w-full max-w-3xl"><thead><tr class="text-left text-slate-500"><th class="p-2">Staff</th><th>Role</th><th>Two-step</th><th></th></tr></thead><tbody>
+{% for u in users %}<tr class="border-t"><td class="p-2">{{ u.full_name }}</td><td>{{ u.role.name }}</td>
+<td>{% if u.id in enrolled %}<span class="text-emerald-700">On</span>{% else %}<span class="text-slate-400">Off</span>{% endif %}</td>
+<td>{% if u.id in enrolled and u.id != current_user.id %}<button class="text-red-600 text-xs underline" data-action="{{ url_for('security.mfa_reset', user_id=u.id) }}" data-confirm="Reset two-step login for {{ u.full_name }}? They must enrol again." data-reload>Reset</button>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

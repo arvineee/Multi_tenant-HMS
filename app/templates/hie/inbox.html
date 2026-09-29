@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}HIE inbox{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-3">HIE inbox</h1><p class="text-sm text-slate-600 mb-3">Records received from the exchange wait here for a clinician to review. Nothing is written into a chart automatically.</p>
+<table class="bg-white rounded shadow text-sm w-full"><tbody>{% for r in rows %}<tr class="border-t"><td class="p-2">{{ r.received_at.strftime('%d %b %H:%M') }}</td><td>{{ r.summary }}</td><td>{{ r.patient.patient_number if r.patient else 'unmatched' }}</td><td>{{ r.status }}</td><td><a class="underline text-blue-700" href="{{ url_for('hie.inbox_item', row_id=r.id) }}">Review</a></td></tr>
+{% else %}<tr><td class="p-4 text-slate-500">Nothing received.</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

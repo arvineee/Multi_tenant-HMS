@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block guest_content %}
+<div class="min-h-screen flex items-center justify-center bg-slate-100 px-4"><div class="bg-white rounded-lg shadow p-8 max-w-md text-center">
+<h1 class="text-lg font-bold mb-2">Digital Health ID sign-in</h1>
+<p class="text-sm text-slate-600">{{ error or 'Digital Health ID sign-in is not set up on this system yet.' }}</p>
+<a class="inline-block mt-4 text-blue-700 underline text-sm" href="{{ url_for('auth.login') }}">Back to sign in</a></div></div>
+{% endblock %}

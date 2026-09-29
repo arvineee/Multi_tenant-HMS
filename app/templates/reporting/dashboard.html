@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Disease surveillance{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Disease surveillance</h1>
+<p class="text-sm text-slate-600 mb-4">{{ mode_note }}</p>
+{% if late %}<div class="bg-red-50 border border-red-300 text-red-800 rounded px-4 py-3 text-sm mb-4"><b>{{ late|length }}</b> immediate notification{{ 's' if late|length != 1 }} not submitted after 24 hours.</div>{% endif %}
+<section class="bg-white rounded shadow p-4 mb-6">
+  <div class="flex justify-between items-center mb-2"><h2 class="font-semibold">Immediate notifications (MOH 502)</h2>
+  <button class="text-sm underline text-blue-700" data-action="{{ url_for('reporting.retry_all') }}" data-reload>Retry all pending</button></div>
+  <table class="w-full text-sm"><thead><tr class="text-left text-slate-500"><th>Detected</th><th>Disease</th><th>Patient</th><th>Status</th><th>Open</th><th></th></tr></thead><tbody>
+  {% for n in notes %}<tr class="border-t"><td class="py-1">{{ n.detected_at.strftime('%d %b %H:%M') }}</td><td>{{ n.disease.name }}</td><td>{{ n.patient.patient_number }}</td>
+  <td class="{{ 'text-emerald-700' if n.status == 'Submitted' else 'text-red-700' if n.status == 'Failed' else 'text-amber-700' }}">{{ n.status }}{% if n.last_error %}<br><span class="text-xs text-slate-500">{{ n.last_error }}</span>{% endif %}</td>
+  <td class="{{ 'text-red-700 font-semibold' if n.hours_open >= 24 and n.status != 'Submitted' }}">{{ n.hours_open }} h</td>
+  <td>{% if n.status != 'Submitted' %}<button class="text-blue-700 underline text-xs" data-action="{{ url_for('reporting.submit_notification', nid=n.id) }}" data-reload-always data-reload>Submit</button>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="py-3 text-slate-500">No notifications yet. They appear automatically when a consultation is finalised with a notifiable diagnosis.</td></tr>{% endfor %}</tbody></table>
+</section>
+<section class="bg-white rounded shadow p-4 mb-6">
+  <h2 class="font-semibold mb-2">IDSR weekly reports (MOH 505)</h2>
+  <form data-post="{{ url_for('reporting.weekly_generate') }}" data-reload class="flex flex-wrap gap-2 items-end text-sm mb-3">
+    <select name="hospital_id" class="border rounded px-2 py-1">{% for h in hospitals %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}</select>
+    <input name="year" type="number" value="{{ prev_week[0] }}" class="border rounded px-2 py-1 w-24"><input name="week" type="number" value="{{ prev_week[1] }}" min="1" max="53" class="border rounded px-2 py-1 w-20">
+    <button class="bg-slate-900 text-white rounded px-3 py-1">Generate</button></form>
+  <ul class="text-sm">{% for r in weekly %}<li class="border-t py-1"><a class="text-blue-700 underline" href="{{ url_for('reporting.weekly_view', rid=r.id) }}">{{ r.label }}</a> — {{ r.hospital.name }} — {{ r.status }}</li>{% else %}<li class="text-slate-500">None generated yet.</li>{% endfor %}</ul>
+</section>
+<section class="bg-white rounded shadow p-4">
+  <h2 class="font-semibold mb-2">Public health events</h2>
+  <ul class="text-sm mb-3">{% for e in events %}<li class="border-t py-2"><b>{{ e.title }}</b> <span class="text-xs rounded px-1.5 py-0.5 bg-slate-100">{{ e.alert_level }}</span> <span class="text-xs">{{ e.status }}</span> {% if e.source == 'Auto-signal' %}<span class="text-xs text-amber-700">auto-signal</span>{% endif %}<br>
+  <span class="text-xs text-slate-500">{{ e.event_type }} · {{ e.cases }} cases · {{ e.deaths }} deaths · {{ e.date_detected }}</span>
+  {% for u in e.updates %}<div class="text-xs ml-3 text-slate-600">↳ {{ u.created_at.strftime('%d %b') }}: {{ u.note }}</div>{% endfor %}
+  <form data-post="{{ url_for('reporting.update_event', eid=e.id) }}" data-reload class="flex gap-1 mt-1"><input name="note" required placeholder="Add update" class="border rounded px-2 py-1 text-xs flex-1">
+  <select name="status" class="border rounded text-xs"><option value="">status…</option>{% for s in event_statuses %}<option>{{ s }}</option>{% endfor %}</select><button class="text-xs bg-slate-800 text-white rounded px-2">Add</button></form></li>{% else %}<li class="text-slate-500">No events recorded.</li>{% endfor %}</ul>
+  <form data-post="{{ url_for('reporting.add_event') }}" data-reload class="grid grid-cols-2 gap-2 text-sm">
+    <select name="hospital_id" class="border rounded px-2 py-1">{% for h in hospitals %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}</select>
+    <select name="event_type" class="border rounded px-2 py-1">{% for t in event_types %}<option>{{ t }}</option>{% endfor %}</select>
+    <input name="title" required placeholder="Title" class="border rounded px-2 py-1 col-span-2">
+    <textarea name="description" rows="2" placeholder="What happened?" class="border rounded px-2 py-1 col-span-2"></textarea>
+    <input name="location" placeholder="Location" class="border rounded px-2 py-1"><input type="date" name="date_detected" class="border rounded px-2 py-1">
+    <input type="number" min="0" name="cases" placeholder="Cases" class="border rounded px-2 py-1"><input type="number" min="0" name="deaths" placeholder="Deaths" class="border rounded px-2 py-1">
+    <select name="alert_level" class="border rounded px-2 py-1">{% for a in alert_levels %}<option {{ 'selected' if a == 'Medium' }}>{{ a }}</option>{% endfor %}</select>
+    <input name="reported_to" placeholder="Reported to (e.g. sub-county coordinator)" class="border rounded px-2 py-1">
+    <button class="bg-slate-900 text-white rounded px-3 py-1.5 col-span-2">Record event</button></form>
+</section>
+{% endblock %}

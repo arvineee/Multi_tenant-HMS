@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-2">Received message #{{ row.id }} — {{ row.status }}</h1>
+<p class="text-sm mb-2">{{ row.summary }} · matched patient: {{ row.patient.full_name if row.patient else 'none' }}</p>
+{% if row.status == 'Received' %}<div class="flex gap-2 mb-3"><button class="bg-emerald-600 text-white rounded px-3 py-1.5 text-sm" data-action="{{ url_for('hie.inbox_item', row_id=row.id) }}" data-body='{"action":"Applied"}' data-reload>Mark reviewed</button>
+<button class="bg-red-600 text-white rounded px-3 py-1.5 text-sm" data-action="{{ url_for('hie.inbox_item', row_id=row.id) }}" data-body='{"action":"Rejected"}' data-reload>Reject</button></div>{% endif %}
+<pre class="bg-slate-900 text-slate-100 rounded p-3 text-xs overflow-auto max-h-[70vh]">{{ pretty }}</pre>
+{% endblock %}

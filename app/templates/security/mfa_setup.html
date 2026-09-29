@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Two-step login{% endblock %}
+{% block content %}
+<div class="max-w-xl">
+  <h1 class="text-2xl font-bold mb-2">Two-step login (MFA)</h1>
+  {% if required and not enabled %}
+  <p class="bg-amber-50 border border-amber-300 text-amber-900 rounded px-4 py-3 text-sm mb-4">Your role requires two-step login. Set it up now to continue using MediCore.</p>
+  {% endif %}
+  {% if enabled %}
+    <p class="mb-3 text-sm">Two-step login is <b class="text-emerald-700">on</b>. You have <b>{{ codes_left }}</b> unused backup code{{ 's' if codes_left != 1 }}.</p>
+    {% if not required %}
+    <form data-post="{{ url_for('security.mfa_disable') }}" data-reload class="bg-white rounded shadow p-4 space-y-2">
+      <label class="text-sm">Enter a current code to turn it off</label>
+      <input name="code" class="w-full border rounded px-3 py-2" autocomplete="one-time-code">
+      <button class="bg-red-600 text-white rounded px-4 py-2 text-sm">Turn off</button>
+    </form>
+    {% else %}<p class="text-sm text-slate-600">It can't be turned off for your role. If you lose your phone, ask an administrator to reset it.</p>{% endif %}
+    <p class="text-sm mt-4"><a class="text-blue-700 underline" href="{{ url_for('security.dha_login', link=1) }}">Link my Digital Health ID</a></p>
+  {% else %}
+    <div id="step1" class="bg-white rounded shadow p-4 space-y-3">
+      <ol class="list-decimal ml-5 text-sm space-y-1"><li>Install an authenticator app (Google Authenticator, Microsoft Authenticator, Authy…).</li>
+        <li>Choose "Add account", then "Enter a setup key" and type the key below (or scan the QR code if one is shown).</li>
+        <li>Enter the 6-digit code the app shows.</li></ol>
+      <button id="start" class="bg-slate-900 text-white rounded px-4 py-2 text-sm">Generate setup key</button>
+      <div id="keybox" class="hidden space-y-2">
+        <p class="text-sm">Setup key: <code id="key" class="bg-slate-100 px-2 py-1 rounded select-all"></code></p>
+        <img id="qr" alt="" class="hidden w-40 h-40">
+        <input id="code" inputmode="numeric" maxlength="6" class="border rounded px-3 py-2 tracking-widest" placeholder="123456">
+        <button id="confirm" class="bg-emerald-600 text-white rounded px-4 py-2 text-sm">Turn on</button>
+      </div>
+    </div>
+    <div id="codes" class="hidden bg-white rounded shadow p-4 mt-4">
+      <p class="font-semibold mb-1">Save your backup codes</p>
+      <p class="text-sm text-slate-600 mb-2">Each works once if you lose your phone. They will not be shown again.</p>
+      <pre id="codelist" class="bg-slate-100 rounded p-3 text-sm select-all"></pre>
+      <a href="{{ url_for('main.dashboard') }}" class="inline-block mt-3 bg-slate-900 text-white rounded px-4 py-2 text-sm">I've saved them — continue</a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+{% if not enabled %}
+<script>
+document.getElementById('start').onclick = async () => {
+  const r = await postJSON("{{ url_for('security.mfa_start') }}", {});
+  if (!r.success) return showToast(r.error, true);
+  document.getElementById('key').textContent = r.secret;
+  document.getElementById('keybox').classList.remove('hidden');
+  const img = document.getElementById('qr'); img.src = "{{ url_for('security.mfa_qr') }}?t=" + Date.now();
+  img.onload = () => img.classList.remove('hidden');
+};
+document.getElementById('confirm').onclick = async () => {
+  const r = await postJSON("{{ url_for('security.mfa_confirm') }}", {code: document.getElementById('code').value});
+  if (!r.success) return showToast(r.error, true);
+  document.getElementById('step1').classList.add('hidden');
+  document.getElementById('codelist').textContent = r.backup_codes.join('\n');
+  document.getElementById('codes').classList.remove('hidden');
+};
+</script>
+{% endif %}
+{% endblock %}

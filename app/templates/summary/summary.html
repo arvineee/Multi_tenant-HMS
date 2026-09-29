@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Clinical summary{% endblock %}
+{% block content %}
+<div class="flex justify-between items-start mb-3 print:hidden"><h1 class="text-2xl font-bold">Clinical summary</h1>
+<div class="flex gap-3 text-sm"><button onclick="window.print()" class="bg-slate-900 text-white rounded px-3 py-1.5">Print</button>
+<a class="bg-slate-200 rounded px-3 py-1.5" href="{{ url_for('summary.fhir_json', patient_id=patient.id) }}">Download FHIR</a>
+{% if can_hie %}<button class="bg-emerald-600 text-white rounded px-3 py-1.5" data-action="{{ url_for('hie.send_patient', patient_id=patient.id) }}" data-confirm="Send this summary to the Kenya HIE? The patient must have consented.">Send to HIE</button>{% endif %}
+<a class="underline py-1.5" href="{{ url_for('records.record_page', patient_id=patient.id) }}">Full record</a></div></div>
+<div class="bg-white rounded shadow p-5 text-sm space-y-4">
+<section><h2 class="font-bold">{{ s.facility.name }}{% if s.facility.mfl_code %} · MFL {{ s.facility.mfl_code }}{% endif %}</h2><p class="text-xs text-slate-500">Generated {{ s.generated_at }}</p></section>
+<section><h3 class="font-semibold border-b mb-1">Patient</h3>
+<p>{{ s.patient.first_name }} {{ s.patient.last_name }} · {{ s.patient.gender }} · {{ s.patient.dob or ('approx. ' ~ s.patient.estimated_age_years ~ ' yrs') }} (age {{ s.patient.age }}) · No. {{ s.patient.patient_number }}</p>
+<p>{{ [s.patient.village, s.patient.ward, s.patient.sub_county, s.patient.county]|select|join(', ') }} {{ s.patient.address or '' }} · {{ s.patient.phone or '' }}</p>
+{% if s.patient.next_of_kin.name %}<p>Next of kin: {{ s.patient.next_of_kin.name }} ({{ s.patient.next_of_kin.relationship or '' }}) {{ s.patient.next_of_kin.phone or '' }}</p>{% endif %}
+{% if s.patient.blood_group %}<p>Blood group: {{ s.patient.blood_group }}</p>{% endif %}</section>
+<section><h3 class="font-semibold border-b mb-1">Allergies — {{ s.allergy_status }}</h3><ul class="list-disc ml-5">{% for a in s.allergies %}<li>{{ a.name }} ({{ a.severity }}{% if a.reaction %}, {{ a.reaction }}{% endif %}) — {{ a.status }}</li>{% else %}<li class="list-none -ml-5 text-slate-500">None recorded</li>{% endfor %}</ul></section>
+<section><h3 class="font-semibold border-b mb-1">Problem list</h3><ul class="list-disc ml-5">{% for p in s.problems %}<li>{{ p.description }}{% if p.code %} [{{ p.code }}]{% endif %} — {{ p.status }}{% if p.onset %}, since {{ p.onset }}{% endif %}</li>{% else %}<li class="list-none -ml-5 text-slate-500">None recorded</li>{% endfor %}</ul></section>
+<section><h3 class="font-semibold border-b mb-1">Current medications</h3><ul class="list-disc ml-5">{% for m in s.medications if m.status == 'Active' %}<li>{{ m.name }} {{ m.dosage or '' }} {{ m.frequency or '' }}{% if m.end %} (until {{ m.end }}){% endif %}</li>{% else %}<li class="list-none -ml-5 text-slate-500">None</li>{% endfor %}</ul></section>
+<section><h3 class="font-semibold border-b mb-1">Recent prescriptions</h3>{% for rx in s.prescriptions[:3] %}<p class="text-xs text-slate-500 mt-1">{{ rx.date }}{% if rx.prescriber %} · {{ rx.prescriber }}{% endif %}</p><ul class="list-disc ml-5">{% for it in rx['items'] %}<li>{{ it.name }} {{ it.dosage or '' }} {{ it.frequency or '' }} {{ it.duration or '' }}</li>{% endfor %}</ul>{% else %}<p class="text-slate-500">None</p>{% endfor %}</section>
+<section><h3 class="font-semibold border-b mb-1">Latest vital signs</h3>{% if s.vitals %}{% set v = s.vitals[0] %}<p>{{ v.date[:10] }}: Temp {{ v.temperature_c or '–' }} °C · Pulse {{ v.pulse_bpm or '–' }} · BP {{ v.bp_systolic or '–' }}/{{ v.bp_diastolic or '–' }} · RR {{ v.respiratory_rate or '–' }} · SpO₂ {{ v.spo2_percent or '–' }}% · Wt {{ v.weight_kg or '–' }} kg · Ht {{ v.height_cm or '–' }} cm · BMI {{ v.bmi or '–' }}</p>{% else %}<p class="text-slate-500">None</p>{% endif %}</section>
+<section><h3 class="font-semibold border-b mb-1">Recent results</h3><ul class="list-disc ml-5">{% for l in s.labs[:10] %}<li>{{ l.name }}: {{ l.value }} {{ l.unit or '' }} ({{ l.date }})</li>{% else %}<li class="list-none -ml-5 text-slate-500">None</li>{% endfor %}</ul></section>
+<section><h3 class="font-semibold border-b mb-1">Care plan</h3><ul class="list-disc ml-5">{% for c in s.care_plans %}<li><b>{{ c.problem }}</b>: {{ c.goal or '' }} — {{ c.interventions or '' }} ({{ c.status }})</li>{% else %}<li class="list-none -ml-5 text-slate-500">None</li>{% endfor %}</ul></section>
+<section><h3 class="font-semibold border-b mb-1">Immunizations</h3><ul class="list-disc ml-5">{% for i in s.immunizations %}<li>{{ i.vaccine }}{% if i.dose %} dose {{ i.dose }}{% endif %} — {{ i.date }}</li>{% else %}<li class="list-none -ml-5 text-slate-500">None recorded</li>{% endfor %}</ul></section>
+</div>
+{% endblock %}

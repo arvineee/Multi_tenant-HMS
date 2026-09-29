@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}IDSR {{ rep.label }}{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">IDSR weekly report {{ rep.label }}</h1>
+<p class="text-sm text-slate-600 mb-1">{{ rep.hospital.name }}{% if rep.hospital.mfl_code %} (MFL {{ rep.hospital.mfl_code }}){% else %} — <span class="text-amber-700">no MFL code set on this hospital</span>{% endif %} · {{ rep.week_start }} to {{ rep.week_end }} · {{ rep.total_outpatient_visits }} outpatient visits</p>
+<p class="text-sm mb-1">Status: <b>{{ rep.status }}</b>{% if rep.last_error %} — {{ rep.last_error }}{% endif %}</p><p class="text-xs text-slate-500 mb-4">{{ mode_note }}</p>
+<table class="bg-white rounded shadow text-sm w-full max-w-3xl mb-4"><thead><tr class="text-left text-slate-500"><th class="p-2">Disease</th><th>Age group</th><th>Cases</th><th>Deaths</th></tr></thead><tbody>
+{% for code, bands in payload.items() %}{% for band, v in bands.items() %}<tr class="border-t"><td class="p-2">{{ diseases[code].name if code in diseases else code }}</td><td>{{ band }}</td><td>{{ v.cases }}</td><td>{{ v.deaths }}</td></tr>{% endfor %}
+{% else %}<tr><td colspan="4" class="p-3 text-slate-500">No notifiable-disease cases this week (a zero report is still submitted).</td></tr>{% endfor %}</tbody></table>
+<div class="flex gap-3 text-sm">
+  {% if rep.status != 'Submitted' %}<button class="bg-emerald-600 text-white rounded px-4 py-2" data-action="{{ url_for('reporting.weekly_submit', rid=rep.id) }}" data-reload data-reload-always>Submit</button>
+  <button class="bg-slate-200 rounded px-4 py-2" data-action="{{ url_for('reporting.weekly_generate') }}" data-body='{"hospital_id":{{ rep.hospital_id }},"year":{{ rep.epi_year }},"week":{{ rep.epi_week }}}' data-reload>Regenerate</button>{% endif %}
+  <a class="underline text-blue-700 py-2" href="{{ url_for('reporting.weekly_export', rid=rep.id, fmt='json') }}">Download JSON</a>
+  <a class="underline text-blue-700 py-2" href="{{ url_for('reporting.weekly_export', rid=rep.id, fmt='xml') }}">Download SDMX-ML</a></div>
+{% endblock %}

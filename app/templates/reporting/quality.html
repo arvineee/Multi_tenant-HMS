@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Quality measures{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Quality measures</h1>
+<p class="text-sm text-slate-600 mb-3">{{ hospital.name }} · {{ mode_note }}</p>
+<form method="get" class="flex flex-wrap gap-2 items-end text-sm mb-3">
+  <select name="hospital_id" class="border rounded px-2 py-1">{% for h in hospitals %}<option value="{{ h.id }}" {{ 'selected' if h.id == hospital.id }}>{{ h.name }}</option>{% endfor %}</select>
+  <input type="date" name="start" value="{{ start }}" class="border rounded px-2 py-1"><input type="date" name="end" value="{{ end }}" class="border rounded px-2 py-1"><button class="bg-slate-200 rounded px-3 py-1">Show period</button></form>
+<div class="flex gap-2 mb-4 text-sm">
+  <button class="bg-slate-900 text-white rounded px-3 py-1.5" data-action="{{ url_for('reporting.quality_calculate') }}" data-body='{"hospital_id":{{ hospital.id }},"start":"{{ start }}","end":"{{ end }}"}' data-reload>Calculate from MediCore data</button>
+  <button class="bg-emerald-600 text-white rounded px-3 py-1.5" data-action="{{ url_for('reporting.quality_submit') }}" data-body='{"hospital_id":{{ hospital.id }},"start":"{{ start }}","end":"{{ end }}"}' data-reload data-reload-always>Submit period</button>
+  <a class="underline text-blue-700 py-1.5" href="{{ url_for('reporting.quality_export', hospital_id=hospital.id) }}">Export CSV</a></div>
+<table class="bg-white rounded shadow text-sm w-full mb-6"><thead><tr class="text-left text-slate-500"><th class="p-2">Measure</th><th>Num</th><th>Den</th><th>Rate</th><th>Target</th><th>Source</th><th>Status</th></tr></thead><tbody>
+{% for m in measures %}{% set r = have.get(m.id) %}<tr class="border-t"><td class="p-2">{{ m.name }}<br><span class="text-xs text-slate-500">{{ m.code }}</span></td>
+{% if r %}<td>{{ r.numerator }}</td><td>{{ r.denominator }}</td><td class="font-semibold {{ 'text-emerald-700' if r.rate is not none and m.target_percent and r.rate >= m.target_percent else 'text-amber-700' }}">{{ (r.rate ~ '%') if r.rate is not none else '—' }}</td><td>{{ m.target_percent or '' }}{{ '%' if m.target_percent }}</td><td>{{ r.source }}</td><td>{{ r.status }}</td>
+{% else %}<td colspan="6" class="text-slate-400">no result for this period</td>{% endif %}</tr>{% endfor %}</tbody></table>
+<div class="grid md:grid-cols-2 gap-4">
+<form data-post="{{ url_for('reporting.quality_capture') }}" data-reload class="bg-white rounded shadow p-4 text-sm space-y-2"><p class="font-semibold">Capture a result manually</p>
+  <input type="hidden" name="hospital_id" value="{{ hospital.id }}"><input type="hidden" name="start" value="{{ start }}"><input type="hidden" name="end" value="{{ end }}">
+  <select name="measure_id" class="border rounded px-2 py-1 w-full">{% for m in measures %}<option value="{{ m.id }}">{{ m.code }} — {{ m.name }}</option>{% endfor %}</select>
+  <div class="flex gap-2"><input type="number" min="0" name="numerator" placeholder="Numerator" required class="border rounded px-2 py-1 flex-1"><input type="number" min="0" name="denominator" placeholder="Denominator" required class="border rounded px-2 py-1 flex-1"></div>
+  <input name="notes" placeholder="Notes" class="border rounded px-2 py-1 w-full"><button class="bg-slate-900 text-white rounded px-3 py-1.5">Save</button></form>
+<form data-upload="{{ url_for('reporting.quality_import') }}" data-reload class="bg-white rounded shadow p-4 text-sm space-y-2"><p class="font-semibold">Import results (CSV)</p>
+  <p class="text-xs text-slate-500">Columns: measure_code, period_start, period_end, numerator, denominator, notes(optional)</p>
+  <input type="hidden" name="hospital_id" value="{{ hospital.id }}"><input type="file" name="file" accept=".csv" required><button class="bg-slate-900 text-white rounded px-3 py-1.5">Import</button></form></div>
+{% endblock %}
