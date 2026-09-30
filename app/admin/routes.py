@@ -1,3 +1,4 @@
+import re
 import datetime
 from decimal import Decimal, InvalidOperation
 
@@ -50,6 +51,11 @@ def settings_update():
         if mfl and (not mfl.isdigit() or len(mfl) > 10):
             return jsonify(success=False, error="MFL code is the numeric Master Facility List code (digits only)."), 400
         hospital.mfl_code = mfl or None
+    if "fr_code" in data:
+        fr = (data.get("fr_code") or "").strip().upper()
+        if fr and not re.fullmatch(r"FID-\d{1,3}-\d{3,8}-\d", fr):
+            return jsonify(success=False, error="Facility Registry code looks like FID-47-115307-8."), 400
+        hospital.fr_code = fr or None
     hospital.phone = data.get("phone", hospital.phone)
     hospital.email = data.get("email", hospital.email)
 

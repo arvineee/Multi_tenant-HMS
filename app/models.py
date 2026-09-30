@@ -86,6 +86,9 @@ class Hospital(db.Model):
     # Kenya Master Facility List code — the identifier DHA/MOH use for a
     # facility in HIE messages, IDSR and KHIS reports.
     mfl_code = db.Column(db.String(20))
+    # Facility Registry code sent to DHA as X-Facility-Id (format like FID-47-115307-8).
+    # Different from the numeric MFL code; get it from the DHA Facility Registry.
+    fr_code = db.Column(db.String(30))
     phone = db.Column(db.String(30))
     email = db.Column(db.String(120))
     logo_path = db.Column(db.String(255))

@@ -257,3 +257,119 @@ def test_client_oauth_caches_token():
     assert c._headers()["Authorization"] == "Bearer abc"
     c._headers()
     assert len(t.calls) == 1
+
+
+# ---- DHA registry / eligibility / OTP client ---------------------------------
+def _dha():
+    import types
+    pkg = sys.modules.setdefault("app", types.ModuleType("app")); hie = types.ModuleType("app.hie")
+    sys.modules["app.hie"] = hie; sys.modules["app.hie.client"] = client
+    return _load("hie/dha_client.py")
+
+
+CFG = {"HIE_MODE": "live", "HIE_BASE_URL": "https://uat.example/", "HIE_CLIENT_ID": "cid", "HIE_CLIENT_SECRET": "sec"}
+
+
+class _Seq:
+    """Fake transport: token endpoint, then scripted API responses."""
+    def __init__(self, *api): self.api, self.calls = list(api), []
+    def post(self, url, **kw):
+        self.calls.append(("post", url, kw))
+        if url.endswith("/tenants/token"):
+            return _Resp(200, js={"access_token": f"tok{sum(1 for c in self.calls if c[1].endswith('/token'))}", "expires_in": 3600})
+        return self.api.pop(0)
+    def get(self, url, **kw):
+        self.calls.append(("get", url, kw)); return self.api.pop(0)
+
+
+def test_dha_requires_live_mode_and_credentials():
+    d = _dha()
+    with pytest.raises(client.HieError):
+        d.DhaHieClient({"HIE_MODE": "mock"}).search_patient("1", "national_id")
+    with pytest.raises(client.HieError):
+        d.DhaHieClient({"HIE_MODE": "live", "HIE_BASE_URL": "https://x"}).token()
+
+
+def test_dha_token_body_caching_and_bearer():
+    d = _dha(); t = _Seq(_Resp(200, js={"ok": 1}), _Resp(200, js={"ok": 2}))
+    c = d.DhaHieClient(CFG, transport=t)
+    c.search_patient("37722207", "national_id"); c.eligibility("37722207", "national_id")
+    tok_calls = [x for x in t.calls if x[1].endswith("/api/v1/tenants/token")]
+    assert len(tok_calls) == 1 and tok_calls[0][2]["json"] == {"client_id": "cid", "client_secret": "sec"}
+    assert t.calls[1][1] == "https://uat.example/api/v1/patients"
+    assert t.calls[1][2]["headers"]["Authorization"] == "Bearer tok1"
+    assert t.calls[1][2]["params"] == {"identification_number": "37722207", "identification_type": "national_id"}
+    assert t.calls[2][1].endswith("/api/v1/patients/eligibility")
+
+
+def test_dha_endpoints_and_params():
+    d = _dha(); t = _Seq(*[_Resp(200, js={}) for _ in range(8)]); c = d.DhaHieClient(CFG, transport=t)
+    c.benefits("P1"); c.sub_benefits("P1", "SHA-19"); c.interventions("P1", "SHA-19-SC-13"); c.otp_contacts("P1")
+    c.send_otp("P1", ["I1", "I2"]); c.send_otp("P1", ["I1"], "C2")
+    api = [x for x in t.calls if "/tenants/token" not in x[1]]
+    assert api[0][1].endswith("/api/v1/patients/benefits") and api[0][2]["params"] == {"patient_id": "P1"}
+    assert api[1][1].endswith("/patients/sub-benefits") and api[1][2]["params"] == {"patient_id": "P1", "parent_benefit_code": "SHA-19"}
+    assert api[2][1].endswith("/patients/benefits/interventions") and api[2][2]["params"] == {"patient_id": "P1", "sub_benefit_code": "SHA-19-SC-13"}
+    assert api[3][1].endswith("/api/v1/patients/contacts")
+    assert api[4][0] == "post" and api[4][1].endswith("/claims/otp") and api[4][2]["json"] == {"patient_id": "P1", "intervention_codes": ["I1", "I2"]}
+    assert api[5][2]["json"] == {"patient_id": "P1", "intervention_codes": ["I1"], "contact_id": "C2"}
+    with pytest.raises(client.HieError):
+        c.send_otp("P1", [])                                   # DHA requires intervention_codes
+
+
+def test_dha_401_refreshes_token_once_then_errors_without_leaking_body():
+    d = _dha(); t = _Seq(_Resp(401, "expired"), _Resp(200, js={"ok": True})); c = d.DhaHieClient(CFG, transport=t)
+    assert c.search_patient("1", "national_id") == {"ok": True}
+    assert sum(1 for x in t.calls if x[1].endswith("/token")) == 2
+    t2 = _Seq(_Resp(500, "X" * 5000)); c2 = d.DhaHieClient(CFG, transport=t2)
+    with pytest.raises(client.HieError) as e:
+        c2.eligibility("1", "national_id")
+    assert len(str(e.value)) < 300 and "XXXXXXXXXX" in str(e.value)[:300]
+    t3 = _Seq(_Resp(401, "no"), _Resp(401, "no")); c3 = d.DhaHieClient(CFG, transport=t3)
+    with pytest.raises(client.HieError):
+        c3.search_patient("1", "national_id")            # a second 401 is not retried forever
+
+
+def test_dha_token_failures():
+    d = _dha()
+    class T:
+        def post(self, *a, **k): return _Resp(403)
+    with pytest.raises(client.HieError):
+        d.DhaHieClient(CFG, transport=T()).token()
+    class T2:
+        def post(self, *a, **k): return _Resp(200, js={"nope": 1})
+    with pytest.raises(client.HieError):
+        d.DhaHieClient(CFG, transport=T2()).token()
+    class T3:
+        calls = []
+        def post(self, url, **k): T3.calls.append(url); return _Resp(200, js={"access_token": "a"})
+    d.DhaHieClient({**CFG, "HIE_TOKEN_URL": "https://auth.example/t"}, transport=T3()).token()
+    assert T3.calls == ["https://auth.example/t"]
+
+
+def test_dha_facility_headers_sent_together_and_token_shared():
+    d = _dha(); t = _Seq(_Resp(200, js={}), _Resp(200, js={}), _Resp(200, js={}))
+    base = d.DhaHieClient(CFG, transport=t)
+    base.for_facility("FID-47-115307-8").search_patient("1", "NATIONAL ID")
+    base.for_facility("FID-01-000001-1").eligibility("1", "National ID")
+    base.search_patient("1", "NATIONAL ID")                       # no facility: token-claim scoping, no headers
+    api = [x for x in t.calls if "/tenants/token" not in x[1]]
+    assert api[0][2]["headers"]["X-Facility-Id"] == "FID-47-115307-8" and api[0][2]["headers"]["X-Facility-Id-Type"] == "fr-code"
+    assert api[1][2]["headers"]["X-Facility-Id"] == "FID-01-000001-1"
+    assert "X-Facility-Id" not in api[2][2]["headers"] and "X-Facility-Id-Type" not in api[2][2]["headers"]
+    assert sum(1 for x in t.calls if x[1].endswith("/tenants/token")) == 1     # one token shared by all facilities
+
+
+def test_dha_eligibility_flags_pomsf_prefix_and_otp_rules():
+    d = _dha()
+    data = {"data": {"fullName": "A B", "memberCrNumber": "CR123-4", "isAlive": True, "whitelistedForOTP": True,
+                     "facilityBiometricsEnforced": False, "schemes": [{"schemeName": "SHIF"}, {"schemeName": "POMSF-047"}]}}
+    f = d.eligibility_flags(data)
+    assert f["cr_id"] == "CR123-4" and f["schemes"] == ["SHIF", "POMSF-047"] and f["whitelisted_for_otp"] is True
+    assert d.is_pomsf(f["schemes"]) and not d.is_pomsf(["SHIF"]) and d.is_pomsf(["USALAMA"])   # POMSF matched by PREFIX
+    assert d.otp_allowed(f) == (True, None)
+    assert not d.otp_allowed({**f, "biometrics_enforced": True})[0]
+    assert not d.otp_allowed({**f, "whitelisted_for_otp": False})[0]
+    assert "deceased" in d.otp_allowed({**f, "is_alive": False})[1]
+    assert d.otp_allowed({"is_alive": None, "whitelisted_for_otp": None, "biometrics_enforced": None})[0]  # unknown flags don't block
+    assert d.eligibility_flags({"isAlive": False})["is_alive"] is False and d.eligibility_flags(None)["schemes"] == []

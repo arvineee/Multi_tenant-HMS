@@ -42,6 +42,32 @@ Schedule on PythonAnywhere (Tasks tab): `flask backup-run` daily, `flask reporti
 | Backup & DR | Encrypted, checksummed, restore-tested on every run; off-site folder or S3; DR plan, RTO/RPO and drill date recorded |
 | HIE / standards | FHIR R4 bundles built + structurally validated, consent-gated ('hie'), inbound HMAC-signed endpoint with clinician review; SDMX-ML export; ICD-10 base with ICD-11/SNOMED/LOINC/HPT/ATC mapping fields and CSV importers |
 
+## DHA registry, eligibility and OTP (`app/hie/dha_client.py`)
+
+Checked against DHA's published docs (hie-docs.dha.go.ke) on 30 Sep 2026. Patient page → **DHA eligibility** (`dha.lookup` permission).
+Order follows DHA's guide: find in registry → **eligibility (decision gate)** → benefits → sub-benefits → interventions, then OTP consent.
+
+**Confirmed in the docs and now implemented**
+* Sub-benefits need a `parent_benefit_code` (read from the benefits step); the old client omitted it and skipped the benefits call.
+* Send OTP requires `intervention_codes`; the old client didn't send them. DHA returns a `consent_request_id`.
+* Multi-facility credentials (MediCore is multi-hospital) must send `X-Facility-Id` + `X-Facility-Id-Type: fr-code` on every request. New per-hospital field
+  **Admin → Settings → DHA Facility Registry code** (looks like `FID-47-115307-8`; not the same as the numeric MFL code).
+* `identification_type` spellings differ: Patient Search uses `NATIONAL ID`, `BIRTH CERTIFICATE NUMBER`, `ALIEN ID`, `REFUGEE ID`, `CR ID`; Eligibility uses
+  `National ID`, `Birth Certificate`, `Alien ID`, `Refugee ID`, `ClientRegistry ID`. Each endpoint now has its own map (override with `HIE_SEARCH_ID_TYPE_MAP` / `HIE_ELIGIBILITY_ID_TYPE_MAP`).
+* **Passport is not accepted** by either endpoint, so it is no longer offered; foreign visitors need another route.
+* DHA recommends the Client Registry ID for eligibility, so once saved it is used first.
+* Eligibility flags are honoured: `isAlive` (deceased needs DHA's deceased workflow), `whitelistedForOTP`, `facilityBiometricsEnforced` (OTP is disabled when required).
+  POMSF/TSC/USALAMA membership is detected by scheme-name **prefix**, as DHA instructs.
+
+**Still unverified (their API reference pages are JavaScript-rendered) — confirm in UAT**
+* Base URL; token endpoint, request body and response fields (the client uses `POST /api/v1/tenants/token` with JSON `client_id`/`client_secret`);
+  the send-OTP path (`/api/v1/claims/otp`); whether `patients/eligibility` and `patients/benefits` carry the `/api/v1` prefix; the patient-search path;
+  and the exact response shapes (the screen shows raw JSON and suggests the CR id, which you confirm before saving).
+* Older DHA material (a 2025 HMIS guide) listed patient search by ID number plus full name and date of birth; the current guide needs only type and number.
+  If UAT asks for more, add it in `search_patient`.
+
+Every call still needs the patient's `sha_claims` consent and is audited (who, whom, step, ok/failed; never the identifier or response).
+
 ## Honest limits — read before you tick anything
 
 * **Nothing here has been tested against DHA's live systems.** The HIE, HPT registry, surveillance endpoint and Digital Health ID

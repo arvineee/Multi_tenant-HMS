@@ -17,6 +17,11 @@
                class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
       </div>
       <div>
+        <label class="block text-sm font-medium mb-1">DHA Facility Registry code <span class="text-xs text-slate-400">(e.g. FID-47-115307-8)</span></label>
+        <input name="fr_code" value="{{ hospital.fr_code if hospital and hospital.fr_code else '' }}"
+               class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div>
         <label class="block text-sm font-medium mb-1">Sub-county</label>
         <input name="sub_county" value="{{ hospital.sub_county if hospital and hospital.sub_county else '' }}"
                class="w-full border border-slate-300 rounded px-3 py-2 text-sm">

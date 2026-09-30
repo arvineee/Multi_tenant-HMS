@@ -57,6 +57,7 @@ PERMISSIONS = [
     ("surveillance.manage", "reporting", "View and submit disease notifications, IDSR weekly reports and public health events"),
     ("quality.manage", "reporting", "Calculate, capture, import, export and submit quality measures"),
     ("hie.manage", "hie", "Send records to and review messages from the Kenya HIE"),
+    ("dha.lookup", "hie", "Look up patients, eligibility, benefits and send consent OTPs through the DHA exchange"),
     ("emergency.access", "security", "Use emergency (break-glass) access to a patient record"),
     ("security.manage", "security", "Manage MFA policy, data-protection registrations, DPIA and review emergency access"),
     ("compliance.view", "compliance", "View the DHA compliance dashboard and attest manual items"),
@@ -70,14 +71,14 @@ ROLES = {
     "CEO": ("organization", [
         "settings.view", "settings.edit", "hospitals.manage", "users.manage", "catalogs.manage",
         "reports.view_all_hospitals", "audit.view", "pricing.manage",
-        "surveillance.manage", "quality.manage", "hie.manage", "security.manage", "compliance.view", "cds.manage"]),
+        "surveillance.manage", "quality.manage", "hie.manage", "security.manage", "compliance.view", "cds.manage", "dha.lookup"]),
     "Hospital Manager": ("hospital", [
         "settings.view", "settings.edit", "users.manage", "reports.view_own_hospital",
         "patient.view", "audit.view",
-        "surveillance.manage", "quality.manage", "hie.manage", "security.manage", "compliance.view", "cds.manage"]),
+        "surveillance.manage", "quality.manage", "hie.manage", "security.manage", "compliance.view", "cds.manage", "dha.lookup"]),
     "Admin": ("hospital", [
         "settings.view", "settings.edit", "users.manage", "catalogs.manage", "audit.view",
-        "quality.manage", "security.manage", "compliance.view", "cds.manage"]),
+        "quality.manage", "security.manage", "compliance.view", "cds.manage", "dha.lookup"]),
     "Doctor": ("department", [
         "patient.view", "patient.register", "consent.manage", "consultation.create",
         "prescription.create", "radiology.order", "lab.order",
@@ -96,10 +97,10 @@ ROLES = {
     ]),
     "Records Officer": ("department", [
         "patient.view", "patient.register", "consent.manage",
-        "record.edit", "surveillance.manage", "hie.manage", "emergency.access"]),
+        "record.edit", "surveillance.manage", "hie.manage", "emergency.access", "dha.lookup"]),
     "Billing / Insurance Clerk": ("department", [
         "patient.view", "billing.manage",
-    ]),
+        "dha.lookup"]),
     # For a Level 1 (community unit) or Level 2 (dispensary) facility
     # commonly staffed by just one or two people — a single clinical
     # officer/nurse who registers the patient, triages, consults,
@@ -124,7 +125,7 @@ ROLES = {
         "radiology.order", "radiology.report",
         "pharmacy.dispense", "pharmacy.stock",
         "billing.manage",
-        "record.edit", "allied.order", "surveillance.manage", "quality.manage", "hie.manage", "emergency.access"]),
+        "record.edit", "allied.order", "surveillance.manage", "quality.manage", "hie.manage", "emergency.access", "dha.lookup"]),
     "Allied Health Professional": ("department", [
         "patient.view", "allied.manage", "record.edit",
     ]),

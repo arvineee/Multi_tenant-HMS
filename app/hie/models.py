@@ -61,3 +61,18 @@ class PrescriptionTransmission(db.Model):
     created_at = db.Column(db.DateTime, default=now)
 
     prescription = db.relationship("Prescription", backref=db.backref("transmissions", lazy=True))
+
+
+class DhaLookup(db.Model):
+    """Audit of each call made to DHA's registry/eligibility/OTP APIs. Stores WHO asked
+    about WHOM and the outcome, never the identifier or the response body."""
+    __tablename__ = "dha_lookups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=False, index=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patients.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    kind = db.Column(db.String(20), nullable=False)   # search / eligibility / sub_benefits / interventions / otp_contacts / otp_send
+    status = db.Column(db.String(10), nullable=False)  # ok / failed
+    detail = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=now)

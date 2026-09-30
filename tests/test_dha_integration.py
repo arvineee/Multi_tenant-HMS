@@ -18,7 +18,7 @@ from app.security.models import RecordVersion, EmergencyAccessGrant
 from app.security import integrity, mfa_service, totp
 
 PERMS = ("patient.view", "patient.register", "record.edit", "surveillance.manage", "emergency.access", "security.manage",
-         "compliance.view", "audit.view", "prescription.create", "hie.manage")
+         "compliance.view", "audit.view", "prescription.create", "hie.manage", "dha.lookup")
 
 
 class Cfg:
@@ -188,3 +188,59 @@ def test_fhir_summary_download_valid(env):
     b = json.loads(r.data)
     from app.hie.fhir import validate_bundle
     assert validate_bundle(b) == [] and b["entry"][0]["resource"]["resourceType"] == "Composition"
+
+
+class _FakeDha:
+    def __init__(self, *a, **k): pass
+    def search_patient(self, n, t): return {"data": [{"id": "DHA-77", "identification_number": n, "t": t}]}
+    def eligibility(self, n, t): return {"isAlive": True, "whitelistedForOTP": True, "facilityBiometricsEnforced": False, "schemes": []}
+
+
+def test_dha_lookup_needs_consent_uses_configured_id_type_and_audits(env, monkeypatch):
+    app, c1, _, doc, _, p, _, _ = env
+    from app.hie import service as hs
+    from app.hie.models import DhaLookup
+    monkeypatch.setattr(hs, "dha_client", lambda hospital=None, transport=None: _FakeDha())
+    blocked = c1.post(f"/hie/patients/{p.id}/dha/search", json={}).get_json()
+    assert not blocked["success"] and "consent" in blocked["error"].lower()
+    from app.consent.models import PatientConsent
+    db.session.add(PatientConsent(patient_id=p.id, purpose="sha_claims", granted=True, method="verbal", recorded_by_id=doc.id)); db.session.commit()
+    r = c1.post(f"/hie/patients/{p.id}/dha/search", json={"id_label": "National ID"}).get_json()
+    assert r["success"] and r["data"]["data"][0]["identification_number"] == "37722207"
+    assert r["data"]["data"][0]["t"] == "NATIONAL ID"                       # Patient Search spelling
+    e = c1.post(f"/hie/patients/{p.id}/dha/eligibility", json={"id_label": "National ID"}).get_json()
+    assert e["success"] and e["otp_allowed"] is True
+    from app.hie import service as _s
+    assert _s.resolve_identifier(db.session.get(Patient, p.id), "eligibility", "National ID")[0] == "National ID"   # Eligibility spelling
+    g = c1.post(f"/hie/patients/{p.id}/dha/guess-id", json={"data": r["data"]}).get_json()
+    assert g["dha_patient_id"] == "DHA-77"
+    assert c1.post(f"/hie/patients/{p.id}/dha/save-client-id", json={"dha_patient_id": "DHA-77"}).get_json()["success"]
+    assert db.session.get(Patient, p.id).dha_client_id == "DHA-77"
+    row = DhaLookup.query.filter_by(kind="search").one()
+    assert row.status == "ok" and "37722207" not in (row.detail or "")
+    assert c1.post(f"/hie/patients/{p.id}/dha/sub-benefits", json={}).status_code == 400   # needs CR id + parent benefit code
+    assert c1.post(f"/hie/patients/{p.id}/dha/otp/send", json={"dha_patient_id": "DHA-77"}).status_code == 400  # needs intervention codes
+    assert AuditLog.query.filter_by(action="dha_lookup_blocked").count() == 1
+
+
+def test_dha_not_live_reports_clearly(env):
+    app, c1, _, doc, _, p, _, _ = env
+    from app.consent.models import PatientConsent
+    db.session.add(PatientConsent(patient_id=p.id, purpose="sha_claims", granted=True, method="verbal", recorded_by_id=doc.id)); db.session.commit()
+    r = c1.post(f"/hie/patients/{p.id}/dha/eligibility", json={})
+    assert r.status_code == 502 and "HIE_MODE=live" in r.get_json()["error"]
+
+
+def test_dha_identifier_resolution_rules(env):
+    app, c1, _, doc, _, p, _, _ = env
+    from app.hie import service as hs
+    pat = db.session.get(Patient, p.id)
+    assert [l for l, _ in hs.patient_identifiers(pat)] == ["National ID"]                 # passport is not offered to DHA
+    pat.dha_client_id = "CR9-1"; pat.birth_certificate_number = "31415161"; pat.id_type = "Refugee ID"; db.session.commit()
+    assert [l for l, _ in hs.patient_identifiers(pat)] == ["ClientRegistry ID", "Refugee ID", "Birth Certificate"]
+    assert hs.resolve_identifier(pat, "eligibility")[:2] == ("ClientRegistry ID", "CR9-1")     # CR ID preferred
+    assert hs.resolve_identifier(pat, "search", "Birth Certificate")[0] == "BIRTH CERTIFICATE NUMBER"
+    pat.dha_client_id = None; pat.national_id = None; pat.birth_certificate_number = None; db.session.commit()
+    with pytest.raises(ValueError) as e:
+        hs.resolve_identifier(pat)
+    assert "passport" in str(e.value).lower()

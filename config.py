@@ -150,6 +150,10 @@ class Config:
     HIE_BUNDLE_PATH = os.environ.get("HIE_BUNDLE_PATH", "/Bundle")
     HIE_PULL_PATH = os.environ.get("HIE_PULL_PATH", "/Patient?identifier={system}|{value}")
     HPT_SEARCH_PATH = os.environ.get("HPT_SEARCH_PATH", "/products?search={q}")
+    # DHA identification_type spellings. Defaults follow hie-docs.dha.go.ke (Patient Search and
+    # Eligibility Check guides use different spellings). Override with a JSON object if UAT differs.
+    HIE_SEARCH_ID_TYPE_MAP = os.environ.get("HIE_SEARCH_ID_TYPE_MAP", "")
+    HIE_ELIGIBILITY_ID_TYPE_MAP = os.environ.get("HIE_ELIGIBILITY_ID_TYPE_MAP", "")
     FORCE_HTTPS = _env_bool("FORCE_HTTPS", False)
     IDLE_LOGOUT_MINUTES = _env_int("IDLE_LOGOUT_MINUTES", 15)
     HIE_AUTO_SEND = _env_bool("HIE_AUTO_SEND", False)  # queue+send on consultation completion (needs 'hie' consent)

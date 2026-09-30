@@ -17,7 +17,7 @@ from app.extensions import db
 
 # table -> {column: ddl}
 NEW_COLUMNS = {
-    "hospitals": {"sub_county": "VARCHAR(100)", "mfl_code": "VARCHAR(20)"},
+    "hospitals": {"sub_county": "VARCHAR(100)", "mfl_code": "VARCHAR(20)", "fr_code": "VARCHAR(30)"},
     "users": {"health_worker_id": "VARCHAR(50)", "professional_license_no": "VARCHAR(50)", "cadre": "VARCHAR(60)"},
     "audit_logs": {"prev_hash": "VARCHAR(64)", "entry_hash": "VARCHAR(64)"},
     "diagnosis_codes": {"icd11_code": "VARCHAR(30)", "snomed_ct_code": "VARCHAR(20)"},
