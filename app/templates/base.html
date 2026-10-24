@@ -155,7 +155,12 @@ async function postJSON(url, data) {
     },
     body: JSON.stringify(data),
   });
-  return res.json();
+  try {
+    return await res.json();
+  } catch (err) {
+    // the server answered with a page instead of JSON (error, redirect, expired session)
+    return {success: false, error: res.redirected ? 'Your session needs attention — refresh the page.' : `Server error (${res.status}). Please try again or contact support.`};
+  }
 }
 
 // ---- generic helpers used by the DHA compliance screens --------------------
@@ -216,3 +221,4 @@ document.addEventListener('click', async (e) => {
 {% block scripts %}{% endblock %}
 </body>
 </html>
+
