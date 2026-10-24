@@ -13,6 +13,7 @@ failure modes turn up in practice.
 """
 import datetime
 import platform
+import secrets
 import shutil
 import sys
 
@@ -25,7 +26,7 @@ from app.extensions import db
 from app.decorators import permission_required
 from app.models import (
     Bed, Admission, StockBatch, StockTransaction, User, Patient, Hospital, Organization,
-    AuditLog, SubscriptionPriceRule, HOSPITAL_LEVELS, PLAN_TYPES, log_action,
+    AuditLog, Role, SubscriptionPriceRule, HOSPITAL_LEVELS, PLAN_TYPES, log_action,
 )
 from app.subscription.pricing import resolve_price
 
@@ -413,3 +414,57 @@ def pricing_delete(rule_id):
     db.session.delete(rule)
     db.session.commit()
     return jsonify(success=True)
+
+
+# ---------------------------------------------------------------------------
+# Password resets — System Maintainer only. Facility admins (CEO, Admin,
+# Hospital Manager) can create staff accounts but cannot reset anyone's
+# password afterwards; staff who are locked out contact the platform owner.
+# The temporary password is generated here, shown once, never stored in
+# plain text or written to the audit log, and the user must replace it at
+# their next login (see the must_change_password gate in app/__init__.py).
+# ---------------------------------------------------------------------------
+
+# no 0/O/1/l/I — the password is read out or typed from a phone screen
+_PASSWORD_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _new_temp_password(length=12):
+    return "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(length))
+
+
+@sysadmin_bp.route("/system-maintenance/users", methods=["GET"])
+@login_required
+@permission_required("system.maintain")
+def users():
+    q = (request.args.get("q") or "").strip()
+    query = User.query.join(Role, User.role_id == Role.id).outerjoin(Hospital, User.hospital_id == Hospital.id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(
+            User.username.ilike(like), User.full_name.ilike(like), User.email.ilike(like),
+            Hospital.name.ilike(like), Role.name.ilike(like),
+        ))
+    found = query.order_by(User.full_name).limit(50).all()
+    return render_template("sysadmin/users.html", users=found, q=q)
+
+
+@sysadmin_bp.route("/system-maintenance/users/<int:user_id>/reset-password", methods=["POST"])
+@login_required
+@permission_required("system.maintain")
+def reset_password(user_id):
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify(success=False, error="User not found."), 404
+    if target.id == current_user.id:
+        return jsonify(success=False, error="Use Change Password for your own account."), 400
+
+    temp = _new_temp_password()
+    target.set_password(temp)
+    target.must_change_password = True      # forced to choose their own at next request
+    target.failed_login_attempts = 0
+    target.locked_until = None              # a reset also clears a lockout
+    log_action(current_user, "update", "User", target.id,
+               {"password_reset_by_system_maintainer": True, "target": target.username})
+    db.session.commit()
+    return jsonify(success=True, temp_password=temp, username=target.username)
