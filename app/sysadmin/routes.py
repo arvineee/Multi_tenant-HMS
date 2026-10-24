@@ -18,15 +18,16 @@ import sys
 
 import flask
 import sqlalchemy
-from flask import Blueprint, render_template, jsonify, current_app
+from flask import Blueprint, render_template, jsonify, current_app, request
 from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.decorators import permission_required
 from app.models import (
     Bed, Admission, StockBatch, StockTransaction, User, Patient, Hospital, Organization,
-    AuditLog, log_action,
+    AuditLog, SubscriptionPriceRule, HOSPITAL_LEVELS, PLAN_TYPES, log_action,
 )
+from app.subscription.pricing import resolve_price
 
 sysadmin_bp = Blueprint("sysadmin", __name__, template_folder="../templates/sysadmin")
 
@@ -265,3 +266,150 @@ def run_fix(key):
     log_action(current_user, "update", "SystemMaintenance", None, {"check": key, "fixed": fixed})
     db.session.commit()
     return jsonify(success=True, fixed=fixed)
+
+
+# ---------------------------------------------------------------------------
+# Subscription pricing — the platform owner (System Maintainer) sets what
+# facilities pay, instead of prices being fixed in code. A rule can target
+# one hospital or all hospitals, and one level or all levels, for the monthly
+# subscription and/or the one-time purchase. See app/subscription/pricing.py
+# for how rules are matched against the default price tables.
+# ---------------------------------------------------------------------------
+
+MAX_PRICE = 10_000_000
+
+
+def _parse_rule_fields(data, creating):
+    """-> (fields dict, error string). Validates everything server-side."""
+    out = {}
+    if creating:
+        plan_type = (data.get("plan_type") or "subscription").strip()
+        if plan_type not in PLAN_TYPES:
+            return None, "Invalid plan type."
+        out["plan_type"] = plan_type
+
+        scope = (data.get("scope") or "all").strip()
+        if scope == "hospital":
+            try:
+                hospital = Hospital.query.get(int(data.get("hospital_id")))
+            except (TypeError, ValueError):
+                hospital = None
+            if not hospital:
+                return None, "Choose the hospital this price is for."
+            out["hospital_id"] = hospital.id
+            out["level"] = None  # a named hospital doesn't need a level filter
+        elif scope == "all":
+            level = (data.get("level") or "").strip()
+            if level and level not in HOSPITAL_LEVELS:
+                return None, "Invalid level."
+            out["hospital_id"] = None
+            out["level"] = level or None
+        else:
+            return None, "Invalid scope."
+
+    try:
+        from decimal import Decimal, InvalidOperation
+        amount = Decimal(str(data.get("amount", "")).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        return None, "Enter the price as a number in KES."
+    if not amount.is_finite() or amount < 0 or amount > MAX_PRICE:
+        return None, f"Price must be between 0 and {MAX_PRICE:,} KES."
+    out["amount"] = amount.quantize(Decimal("0.01"))
+    out["note"] = ((data.get("note") or "").strip()[:300]) or None
+    return out, None
+
+
+def _rule_summary(rule):
+    return {"scope": rule.scope_label, "plan_type": rule.plan_type, "amount": float(rule.amount), "active": rule.is_active}
+
+
+@sysadmin_bp.route("/system-maintenance/pricing", methods=["GET"])
+@login_required
+@permission_required("system.maintain")
+def pricing():
+    rules = SubscriptionPriceRule.query.order_by(
+        SubscriptionPriceRule.is_active.desc(), SubscriptionPriceRule.updated_at.desc()
+    ).all()
+    hospitals = Hospital.query.order_by(Hospital.name).all()
+    # What each customer organization is charged right now, and why.
+    effective = []
+    for org in Organization.query.order_by(Organization.name).all():
+        if any(u.role and u.role.scope == "platform" for u in org.users):
+            continue  # the maintenance placeholder org isn't a paying customer
+        monthly, m_rule = resolve_price(org, "subscription")
+        once, p_rule = resolve_price(org, "purchase")
+        effective.append({"org": org, "monthly": monthly, "m_rule": m_rule, "once": once, "p_rule": p_rule})
+    return render_template(
+        "sysadmin/pricing.html", rules=rules, hospitals=hospitals, levels=HOSPITAL_LEVELS,
+        effective=effective,
+    )
+
+
+@sysadmin_bp.route("/system-maintenance/pricing", methods=["POST"])
+@login_required
+@permission_required("system.maintain")
+def pricing_create():
+    data = request.get_json(silent=True) or request.form
+    fields, error = _parse_rule_fields(data, creating=True)
+    if error:
+        return jsonify(success=False, error=error), 400
+
+    duplicate = SubscriptionPriceRule.query.filter_by(
+        plan_type=fields["plan_type"], hospital_id=fields["hospital_id"], level=fields["level"], is_active=True,
+    ).first()
+    if duplicate:
+        return jsonify(success=False, error="An active rule for exactly this scope already exists — edit or deactivate it instead."), 400
+
+    rule = SubscriptionPriceRule(created_by_id=current_user.id, **fields)
+    db.session.add(rule)
+    db.session.flush()
+    log_action(current_user, "create", "SubscriptionPriceRule", rule.id, _rule_summary(rule))
+    db.session.commit()
+    return jsonify(success=True, id=rule.id)
+
+
+@sysadmin_bp.route("/system-maintenance/pricing/<int:rule_id>/update", methods=["POST"])
+@login_required
+@permission_required("system.maintain")
+def pricing_update(rule_id):
+    rule = SubscriptionPriceRule.query.get_or_404(rule_id)
+    data = request.get_json(silent=True) or request.form
+    fields, error = _parse_rule_fields(data, creating=False)
+    if error:
+        return jsonify(success=False, error=error), 400
+    before = _rule_summary(rule)
+    rule.amount = fields["amount"]
+    rule.note = fields["note"]
+    log_action(current_user, "update", "SubscriptionPriceRule", rule.id, {"before": before, "after": _rule_summary(rule)})
+    db.session.commit()
+    return jsonify(success=True)
+
+
+@sysadmin_bp.route("/system-maintenance/pricing/<int:rule_id>/toggle", methods=["POST"])
+@login_required
+@permission_required("system.maintain")
+def pricing_toggle(rule_id):
+    rule = SubscriptionPriceRule.query.get_or_404(rule_id)
+    if not rule.is_active:
+        clash = SubscriptionPriceRule.query.filter(
+            SubscriptionPriceRule.id != rule.id, SubscriptionPriceRule.is_active.is_(True),
+            SubscriptionPriceRule.plan_type == rule.plan_type,
+            SubscriptionPriceRule.hospital_id == rule.hospital_id, SubscriptionPriceRule.level == rule.level,
+        ).first()
+        if clash:
+            return jsonify(success=False, error="Another active rule already covers this exact scope."), 400
+    rule.is_active = not rule.is_active
+    log_action(current_user, "update", "SubscriptionPriceRule", rule.id, {"is_active": rule.is_active})
+    db.session.commit()
+    return jsonify(success=True, active=rule.is_active)
+
+
+@sysadmin_bp.route("/system-maintenance/pricing/<int:rule_id>/delete", methods=["POST"])
+@login_required
+@permission_required("system.maintain")
+def pricing_delete(rule_id):
+    rule = SubscriptionPriceRule.query.get_or_404(rule_id)
+    log_action(current_user, "delete", "SubscriptionPriceRule", rule.id, _rule_summary(rule))
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify(success=True)

@@ -63,6 +63,7 @@
 
       {% if current_user.has_permission('system.maintain') %}
       <a href="{{ url_for('sysadmin.dashboard') }}" class="block px-3 py-2 rounded hover:bg-slate-800 text-amber-400">System Maintenance</a>
+      <a href="{{ url_for('sysadmin.pricing') }}" class="block px-3 py-2 rounded hover:bg-slate-800 text-amber-400">Subscription Pricing</a>
       {% endif %}
 
       {% if current_user.has_permission('users.manage') %}

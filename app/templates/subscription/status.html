@@ -48,6 +48,7 @@
   <div class="bg-white rounded-lg shadow p-5 border-2 {{ 'border-emerald-500' if org.is_subscription_active else 'border-transparent' }}">
     <h2 class="font-semibold mb-1">Monthly Subscription</h2>
     <p class="text-2xl font-bold mb-1">{{ 'Free' if monthly_price == 0 else 'KES ' + '{:,.0f}'.format(monthly_price) }}<span class="text-sm font-normal text-slate-500">{{ '' if monthly_price == 0 else '/month' }}</span></p>
+    {% if monthly_rule %}<p class="text-xs text-emerald-700 mb-1">Special rate for your facility{% if monthly_rule.note %} — {{ monthly_rule.note }}{% endif %}</p>{% endif %}
     <p class="text-xs text-slate-500 mb-4">Pay as you go. Cancel anytime — access continues until the paid period ends.</p>
 
     <div id="pay-error-subscription" class="hidden mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
@@ -76,6 +77,7 @@
   <div class="bg-white rounded-lg shadow p-5 border-2 border-transparent">
     <h2 class="font-semibold mb-1">Buy Outright</h2>
     <p class="text-2xl font-bold mb-1">{{ 'Free' if purchase_price == 0 else 'KES ' + '{:,.0f}'.format(purchase_price) }}<span class="text-sm font-normal text-slate-500">{{ '' if purchase_price == 0 else ' once' }}</span></p>
+    {% if purchase_rule %}<p class="text-xs text-emerald-700 mb-1">Special rate for your facility{% if purchase_rule.note %} — {{ purchase_rule.note }}{% endif %}</p>{% endif %}
     <p class="text-xs text-slate-500 mb-4">One payment, own it permanently. No monthly bills, ever, for this facility level.</p>
 
     <div id="pay-error-purchase" class="hidden mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>

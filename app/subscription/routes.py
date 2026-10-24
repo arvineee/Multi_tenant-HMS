@@ -5,10 +5,10 @@ from flask_login import login_required, current_user
 
 from app.extensions import db, csrf
 from app.models import (
-    SubscriptionPayment, SUBSCRIPTION_PRICING, ONE_TIME_PRICING,
-    SUBSCRIPTION_PERIOD_DAYS, PLAN_TYPES, log_action,
+    SubscriptionPayment, SUBSCRIPTION_PERIOD_DAYS, PLAN_TYPES, log_action,
 )
 from app.subscription import intasend_client
+from app.subscription.pricing import resolve_price
 
 subscription_bp = Blueprint("subscription", __name__, template_folder="../templates/subscription")
 
@@ -18,13 +18,16 @@ def _now():
 
 
 def _activate_payment(payment):
-    """Applies whatever the payment actually bought: a one-time purchase
+    _activate(payment.organization, payment.plan_type)
+
+
+def _activate(org, plan_type):
+    """Applies whatever was actually bought: a one-time purchase
     grants permanent access with nothing left to track; a subscription
     payment extends current_period_end from whichever is later — right
     now, or the current paid-through date — so paying early stacks on
     top of remaining time instead of wasting it."""
-    org = payment.organization
-    if payment.plan_type == "purchase":
+    if plan_type == "purchase":
         org.subscription_status = "purchased"
         org.current_period_end = None
     else:
@@ -41,13 +44,16 @@ def _can_manage_billing(user):
 @login_required
 def status():
     org = current_user.organization
-    monthly_price = SUBSCRIPTION_PRICING.get(org.plan_level, 0)
-    purchase_price = ONE_TIME_PRICING.get(org.plan_level, 0)
+    # Prices come from the System Maintainer's pricing rules (falling back
+    # to the default tables) — see app/subscription/pricing.py.
+    monthly_price, monthly_rule = resolve_price(org, "subscription")
+    purchase_price, purchase_rule = resolve_price(org, "purchase")
     recent_payments = SubscriptionPayment.query.filter_by(organization_id=org.id).order_by(
         SubscriptionPayment.created_at.desc()
     ).limit(5).all()
     return render_template(
         "subscription/status.html", org=org, monthly_price=monthly_price, purchase_price=purchase_price,
+        monthly_rule=monthly_rule, purchase_rule=purchase_rule,
         recent_payments=recent_payments, can_pay=_can_manage_billing(current_user),
         intasend_configured=intasend_client.is_configured(),
     )
@@ -65,19 +71,17 @@ def checkout():
     plan_type = data.get("plan_type", "subscription")
     if plan_type not in PLAN_TYPES:
         return jsonify(success=False, error="Invalid plan type."), 400
-    if not phone_number:
+    # Price is always resolved server-side, never taken from the browser.
+    price, rule = resolve_price(org, plan_type)
+    if price > 0 and not phone_number:
         return jsonify(success=False, error="Enter the M-Pesa phone number to charge."), 400
 
-    price_table = ONE_TIME_PRICING if plan_type == "purchase" else SUBSCRIPTION_PRICING
-    price = price_table.get(org.plan_level, 0)
-
     if price <= 0:
-        payment = SubscriptionPayment(
-            organization_id=org.id, plan_type=plan_type, amount=0, phone_number=phone_number,
-            status="Completed", provider="FREE",
-        )
-        db.session.add(payment)
-        _activate_payment(payment)
+        # Nothing to charge, so there's no payment row to record (the
+        # table requires amount > 0). Just grant what the free plan gives.
+        _activate(org, plan_type)
+        log_action(current_user, "update", "Organization", org.id,
+                   {"free_activation": plan_type, "price_rule_id": rule.id if rule else None})
         db.session.commit()
         return jsonify(success=True, free=True, message="This plan level is free — your account is active.")
 

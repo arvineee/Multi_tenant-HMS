@@ -1653,6 +1653,51 @@ SUBSCRIPTION_PERIOD_DAYS = 30
 PLAN_TYPES = ["subscription", "purchase"]
 
 
+class SubscriptionPriceRule(db.Model):
+    """A price set by the System Maintainer (platform owner) that overrides
+    the default SUBSCRIPTION_PRICING / ONE_TIME_PRICING tables above.
+
+    Scope — which organizations the rule reaches:
+      hospital_id set   -> that one hospital (and so the organization it
+                           belongs to, since billing is per organization)
+      hospital_id NULL  -> every hospital ("all hospitals")
+    and, independently:
+      level set         -> only organizations whose plan_level is that level
+      level NULL        -> every level
+
+    Price lookup order (see app/subscription/pricing.py): a rule for the
+    specific hospital beats a rule for a level, which beats an all-levels
+    rule, which beats the built-in default table. Nothing is hardcoded:
+    the default tables are only the fallback when no active rule matches.
+    """
+    __tablename__ = "subscription_price_rules"
+
+    id = db.Column(db.Integer, primary_key=True)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=True, index=True)
+    level = db.Column(db.String(20), nullable=True)   # 'Level 1'..'Level 6', or NULL = any level
+    plan_type = db.Column(db.String(20), nullable=False, default="subscription")  # 'subscription' or 'purchase'
+    amount = db.Column(db.Numeric(12, 2), nullable=False)  # KES; 0 = free
+    note = db.Column(db.String(300))                  # why — e.g. "negotiated rate"
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=now)
+    updated_at = db.Column(db.DateTime, default=now, onupdate=now)
+
+    hospital = db.relationship("Hospital")
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        db.CheckConstraint("amount >= 0", name="ck_price_rule_amount_nonneg"),
+    )
+
+    @property
+    def scope_label(self):
+        who = self.hospital.name if self.hospital else "All hospitals"
+        lvl = self.level or "all levels"
+        return f"{who} · {lvl}"
+
+
 class SubscriptionPayment(db.Model):
     """One payment attempt against an organization's platform access,
     via IntaSend (M-Pesa STK push). status moves Pending -> Completed/

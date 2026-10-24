@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Subscription Pricing{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Subscription Pricing</h1>
+<p class="text-sm text-slate-500 mb-6">
+  Set what facilities pay for MediCore — for one hospital or all hospitals, at one level or every level.
+  Visible only to System Maintainer accounts. Where no rule matches, the default level price applies.
+</p>
+
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+  <h2 class="font-semibold mb-1">Add a price</h2>
+  <p class="text-xs text-slate-500 mb-4">
+    Most specific wins: a price for one hospital beats a level price, which beats an all-levels price, which beats the default.
+    Set the price to 0 to make it free. Changes apply to the next payment; payments already in progress keep the amount they started with.
+  </p>
+  <form id="rule-form" class="grid grid-cols-1 md:grid-cols-6 gap-3 text-sm items-end">
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Applies to</label>
+      <select name="scope" id="scope" class="w-full border border-slate-300 rounded px-2 py-2">
+        <option value="hospital">One hospital</option>
+        <option value="all">All hospitals</option>
+      </select>
+    </div>
+    <div id="hospital-wrap" class="md:col-span-2">
+      <label class="block text-xs text-slate-500 mb-1">Hospital</label>
+      <select name="hospital_id" class="w-full border border-slate-300 rounded px-2 py-2">
+        <option value="">— choose —</option>
+        {% for h in hospitals %}
+        <option value="{{ h.id }}">{{ h.name }} ({{ h.level }}{% if h.organization %} · {{ h.organization.name }}{% endif %})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="level-wrap" class="hidden">
+      <label class="block text-xs text-slate-500 mb-1">Level</label>
+      <select name="level" class="w-full border border-slate-300 rounded px-2 py-2">
+        <option value="">All levels</option>
+        {% for l in levels %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Plan</label>
+      <select name="plan_type" class="w-full border border-slate-300 rounded px-2 py-2">
+        <option value="subscription">Monthly subscription</option>
+        <option value="purchase">One-time purchase</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Price (KES)</label>
+      <input name="amount" type="number" min="0" step="1" required class="w-full border border-slate-300 rounded px-2 py-2" placeholder="1500">
+    </div>
+    <div class="md:col-span-5">
+      <label class="block text-xs text-slate-500 mb-1">Note (shown to the facility, optional)</label>
+      <input name="note" maxlength="300" class="w-full border border-slate-300 rounded px-2 py-2" placeholder="e.g. Negotiated rate">
+    </div>
+    <div>
+      <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded">Save price</button>
+    </div>
+  </form>
+</div>
+
+<div class="bg-white rounded-lg shadow p-5 mb-6">
+  <h2 class="font-semibold mb-3">Price rules</h2>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-500">
+      <th class="py-1">Applies to</th><th>Plan</th><th>Price (KES)</th><th>Note</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for r in rules %}
+      <tr class="border-t" data-rule="{{ r.id }}">
+        <td class="py-2">{{ r.scope_label }}</td>
+        <td>{{ 'One-time purchase' if r.plan_type == 'purchase' else 'Monthly' }}</td>
+        <td><input type="number" min="0" step="1" value="{{ '%d' % r.amount if r.amount == r.amount|int else r.amount }}" class="rule-amount w-28 border border-slate-300 rounded px-2 py-1"></td>
+        <td><input type="text" maxlength="300" value="{{ r.note or '' }}" class="rule-note w-full min-w-[10rem] border border-slate-300 rounded px-2 py-1"></td>
+        <td class="{{ 'text-emerald-700' if r.is_active else 'text-slate-400' }}">{{ 'Active' if r.is_active else 'Inactive' }}</td>
+        <td class="whitespace-nowrap text-right">
+          <button class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50" onclick="saveRule({{ r.id }})">Save</button>
+          <button class="text-xs px-2 py-1 rounded border border-slate-300 hover:bg-slate-50" onclick="toggleRule({{ r.id }})">{{ 'Deactivate' if r.is_active else 'Activate' }}</button>
+          <button class="text-xs px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50" onclick="deleteRule({{ r.id }})">Delete</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="py-4 text-center text-slate-400">No custom prices yet — every facility pays its level's default price.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="bg-white rounded-lg shadow p-5">
+  <h2 class="font-semibold mb-1">What each organization pays right now</h2>
+  <p class="text-xs text-slate-500 mb-3">Resolved the same way checkout does it, so this is exactly what they will be charged.</p>
+  <div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-500"><th class="py-1">Organization</th><th>Level</th><th>Monthly (KES)</th><th>One-time (KES)</th></tr></thead>
+    <tbody>
+      {% for e in effective %}
+      <tr class="border-t">
+        <td class="py-1.5">{{ e.org.name }}</td>
+        <td>{{ e.org.plan_level }}</td>
+        <td>{{ '{:,.0f}'.format(e.monthly) }} <span class="text-xs {{ 'text-emerald-700' if e.m_rule else 'text-slate-400' }}">{{ 'custom' if e.m_rule else 'default' }}</span></td>
+        <td>{{ '{:,.0f}'.format(e.once) }} <span class="text-xs {{ 'text-emerald-700' if e.p_rule else 'text-slate-400' }}">{{ 'custom' if e.p_rule else 'default' }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="py-4 text-center text-slate-400">No organizations yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+const scopeSel = document.getElementById('scope');
+function syncScope() {
+  const isHospital = scopeSel.value === 'hospital';
+  document.getElementById('hospital-wrap').classList.toggle('hidden', !isHospital);
+  document.getElementById('level-wrap').classList.toggle('hidden', isHospital);
+}
+scopeSel.addEventListener('change', syncScope);
+syncScope();
+
+document.getElementById('rule-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();  // base.html has a generic form handler; this page does its own
+  const data = {};
+  new FormData(e.target).forEach((v, k) => { data[k] = v; });
+  const r = await postJSON("{{ url_for('sysadmin.pricing_create') }}", data);
+  if (r.success) { showToast('Price saved.'); setTimeout(() => location.reload(), 500); }
+  else showToast(r.error || 'Could not save.', true);
+}, true);
+
+async function saveRule(id) {
+  const row = document.querySelector(`tr[data-rule="${id}"]`);
+  const r = await postJSON(`/system-maintenance/pricing/${id}/update`, {
+    amount: row.querySelector('.rule-amount').value, note: row.querySelector('.rule-note').value,
+  });
+  if (r.success) { showToast('Updated.'); setTimeout(() => location.reload(), 500); }
+  else showToast(r.error || 'Could not update.', true);
+}
+async function toggleRule(id) {
+  const r = await postJSON(`/system-maintenance/pricing/${id}/toggle`, {});
+  if (r.success) location.reload(); else showToast(r.error || 'Could not change.', true);
+}
+async function deleteRule(id) {
+  if (!confirm('Delete this price rule? The affected facilities go back to the next matching price.')) return;
+  const r = await postJSON(`/system-maintenance/pricing/${id}/delete`, {});
+  if (r.success) location.reload(); else showToast(r.error || 'Could not delete.', true);
+}
+</script>
+{% endblock %}

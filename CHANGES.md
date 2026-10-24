@@ -549,3 +549,14 @@ that bundles the full front-line operational permission set into one account.
 - Consent "method" no longer defaults to Written on the form; staff must choose. `POST /patients/<id>/consent` returns 400 if `method` is missing.
 - National ID is masked (last 4 only) on the patient page.
 - Consents already recorded as "digital" before this change show "no on-screen confirmation on file".
+
+
+## Subscription pricing managed by the System Maintainer
+- Subscription prices are no longer fixed in code. The platform owner (System Maintainer) sets them at **System Maintenance → Subscription Pricing** (`/system-maintenance/pricing`, permission `system.maintain`).
+- A price rule targets **one hospital or all hospitals**, **one level or every level**, for the **monthly subscription** and/or the **one-time purchase**. Example: Gillcare Medical Clinic (Level 2) at KES 1,500/month = a "One hospital" rule for Gillcare, Monthly, 1500. Nothing about Gillcare is in the code.
+- Precedence, most specific first: a specific hospital → a level → all levels → the built-in default table (`SUBSCRIPTION_PRICING` / `ONE_TIME_PRICING`, now just the fallback). Billing is per organization, so a hospital rule applies to the organization that owns that hospital.
+- Checkout resolves the price on the server (`app/subscription/pricing.py`); the amount can't be sent from the browser. The subscription page shows "Special rate for your facility" (plus the note) when a rule applies. Changing a rule affects the next payment only; pending payments keep their amount.
+- Rules can be edited, deactivated, reactivated or deleted; every change is written to the audit log. The page also lists what every organization is charged right now, and whether that price is custom or default.
+- A price of 0 makes the plan free. Two latent bugs on the free path were fixed on the way: checkout demanded a phone number even though the form hides the field for free plans, and the free activation tried to insert a payment row with amount 0, which the table's `amount > 0` constraint rejects. Free activations now just grant access (and are audited) without a payment row.
+- **Upgrading an existing database:** run `python upgrade_v18.py` once (idempotent) to create the new `subscription_price_rules` table. Fresh installs: nothing extra.
+- Tests: `tests/test_subscription_pricing.py`
