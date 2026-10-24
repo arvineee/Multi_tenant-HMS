@@ -28,7 +28,7 @@
 
       {% if current_user.has_permission('triage.create') or current_user.has_permission('consultation.create') %}
       <a href="{{ url_for('clinical.patient_queue') }}" class="block px-3 py-2 rounded hover:bg-slate-800">
-        {{ 'Consultation Queue' if current_user.has_permission('consultation.create') else 'Triage Queue' }}
+        {{ 'Patient Queue' if current_user.has_permission('consultation.create') and current_user.has_permission('triage.create') else 'Consultation Queue' if current_user.has_permission('consultation.create') else 'Triage Queue' }}
       </a>
       <a href="{{ url_for('inpatient.ward_census') }}" class="block px-3 py-2 rounded hover:bg-slate-800">Ward Census</a>
       {% endif %}
@@ -221,4 +221,3 @@ document.addEventListener('click', async (e) => {
 {% block scripts %}{% endblock %}
 </body>
 </html>
-

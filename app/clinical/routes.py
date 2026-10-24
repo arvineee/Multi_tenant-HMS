@@ -524,7 +524,12 @@ def patient_queue():
     active visit in the building."""
     hospital_ids = current_user.accessible_hospital_ids()
 
-    if current_user.has_permission("consultation.create"):
+    if current_user.has_permission("consultation.create") and current_user.has_permission("triage.create"):
+        # one person does both (Level 1/2 doctor, Facility Operator): show the
+        # whole front of the visit, not just the consultation half
+        statuses = ["Waiting", "Triaged", "In Consultation"]
+        title = "Patient Queue"
+    elif current_user.has_permission("consultation.create"):
         statuses = ["Triaged", "In Consultation"]
         title = "Consultation Queue"
     elif current_user.has_permission("triage.create"):

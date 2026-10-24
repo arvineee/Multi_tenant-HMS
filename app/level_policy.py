@@ -16,6 +16,32 @@ LEVEL_CAPABILITIES = {
 }
 
 
+# Small facilities (Level 1 community units, Level 2 dispensaries/clinics) are
+# often run by one or two clinicians, so a Doctor there has to carry a patient
+# through the whole visit: register -> triage -> consult -> lab / X-ray ->
+# dispense -> bill. At Level 3 and above these duties stay separated between
+# roles, so the extras below apply ONLY while the user's own hospital is Level
+# 1 or 2 — nothing is stored on the role, and moving the doctor to a bigger
+# facility removes them immediately.
+SMALL_FACILITY_LEVELS = ("Level 1", "Level 2")
+SMALL_FACILITY_EXTRA_PERMISSIONS = {
+    "Doctor": frozenset({
+        "triage.create",
+        "lab.result",
+        "radiology.report",
+        "pharmacy.dispense",
+        "billing.manage",
+    }),
+}
+
+
+def small_facility_extra_permissions(role_name, hospital):
+    """Permissions a role gains only because it works at a Level 1/2 facility."""
+    if not hospital or hospital.level not in SMALL_FACILITY_LEVELS:
+        return frozenset()
+    return SMALL_FACILITY_EXTRA_PERMISSIONS.get(role_name, frozenset())
+
+
 def hospital_allows_inpatient(hospital):
     if not hospital:
         return False

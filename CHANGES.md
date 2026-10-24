@@ -560,3 +560,18 @@ that bundles the full front-line operational permission set into one account.
 - A price of 0 makes the plan free. Two latent bugs on the free path were fixed on the way: checkout demanded a phone number even though the form hides the field for free plans, and the free activation tried to insert a payment row with amount 0, which the table's `amount > 0` constraint rejects. Free activations now just grant access (and are audited) without a payment row.
 - **Upgrading an existing database:** run `python upgrade_v18.py` once (idempotent) to create the new `subscription_price_rules` table. Fresh installs: nothing extra.
 - Tests: `tests/test_subscription_pricing.py`
+
+## Moving to Postgres (Neon)
+- `migrate_sqlite_to_postgres.py` copies an existing SQLite database into an empty Postgres database (tables created from the models, rows copied raw so encrypted columns and the audit hash chain stay intact, id sequences reset, row counts verified). Run it from a machine that can reach the database server, then `python upgrade_v18.py` against Postgres to install the append-only triggers. Keep the same `DATA_ENCRYPTION_KEYS` and `SECRET_KEY`.
+- `psycopg2-binary` added to requirements.txt.
+
+## Fix: "Generate setup key" did nothing for roles that must use two-step login
+- A user whose role requires MFA is redirected to the setup page for every URL not in `EXEMPT_ENDPOINTS`. `security.mfa_start` (the Generate setup key request) and `security.mfa_qr` were missing, so the request was redirected to an HTML page and the button silently failed. Both are now exempt (`app/__init__.py`).
+- `postJSON` in `base.html` no longer fails silently when the server answers with a page instead of JSON; it shows an error message.
+- Test: `test_mfa_setup_requests_reachable_before_enrolment`.
+
+## Level 1/2 doctors run the whole visit
+- A **Doctor** whose hospital is **Level 1 or Level 2** can now also triage, enter lab results, report X-rays, dispense drugs and bill — register → triage → consult → lab/X-ray → dispense → bill — without a second login. The extras are defined in `app/level_policy.py` (`SMALL_FACILITY_EXTRA_PERMISSIONS`) and applied in `User.has_permission`, so nothing is stored on the role: Level 3+ doctors are unchanged, and moving a doctor to a bigger facility removes the extras immediately.
+- Not included: receiving/managing pharmacy stock, pricing, catalogs, users and settings (still admin tasks).
+- The queue page now shows Waiting + Triaged + In Consultation to anyone who can both triage and consult (these doctors, and Facility Operators), titled "Patient Queue". Previously it showed only the consultation half, so patients waiting for triage never appeared.
+- Tests: `tests/test_small_facility_doctor.py`.

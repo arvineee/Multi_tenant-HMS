@@ -4,6 +4,7 @@
 <h1 class="text-2xl font-bold mb-1">{{ title }}</h1>
 <p class="text-sm text-slate-500 mb-6">
   {% if title == 'Triage Queue' %}Patients checked in and waiting for vitals — this is your queue only.
+  {% elif title == 'Patient Queue' %}Patients waiting for vitals, triaged, or in consultation — you cover the whole visit at this facility.
   {% else %}Patients triaged and ready for (or already mid-) consultation — this is your queue only.{% endif %}
 </p>
 

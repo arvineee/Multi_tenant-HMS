@@ -240,7 +240,14 @@ class User(UserMixin, db.Model):
         self.last_login = now()
 
     def has_permission(self, code):
-        return self.role.has_permission(code) if self.role else False
+        if not self.role:
+            return False
+        if self.role.has_permission(code):
+            return True
+        # Level 1/2 facilities: a Doctor also triages, reports lab/X-ray,
+        # dispenses and bills so one clinician can run the whole visit.
+        from app.level_policy import small_facility_extra_permissions
+        return code in small_facility_extra_permissions(self.role.name, self.hospital)
 
     def accessible_hospital_ids(self):
         """Returns the list of hospital IDs this user is allowed to view."""
